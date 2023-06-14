@@ -13,8 +13,11 @@ use std::{
 pub struct WindowState {
     pub term_fd: Rc<i32>,
     
-    pub offset: helper_structs::TPos<u16>,
-    pub buffer_size: helper_structs::TPos<u16>,
+    pub terminal_size: helper_structs::TPos<u16>,
+    
+    pub doc_position: helper_structs::TPos<usize>,
+    pub doc_cursor_visual: helper_structs::TPos<i8>,
+    pub cursor_visual: helper_structs::TPos<i8>,
     
     pub doc_start: helper_structs::TPos<usize>,
     pub cursor_doc: helper_structs::TPos<usize>,
@@ -25,8 +28,35 @@ pub struct WindowState {
     pub append_buffer: String,
     pub lines: Vec<String>,
     
+    pub main_buffers: Vec<Buffer>,
+    
     config: Config,
 }
+
+
+
+#[allow(dead_code)]
+#[derive(Default, Debug)]
+pub struct Buffer {
+    pub name: String,
+    pub offset: helper_structs::TPos<u16>,
+    pub buffer_size: helper_structs::TPos<u16>,
+    
+    pub doc_position: helper_structs::TPos<usize>,
+    pub doc_cursor_visual: helper_structs::TPos<i8>,
+    pub cursor_visual: helper_structs::TPos<i8>,
+    
+    pub margins_left:u8,
+    pub margins_bottom:u8,
+    
+    
+    pub lines: Vec<String>,
+    
+    pub buffer_graphics: String,
+    
+    config: Config,
+}
+
 
 #[derive(Default, Debug)]
 struct Config {
@@ -48,6 +78,7 @@ impl WindowState {
         self.config.scroll_off = 3;
         match opening_file {
             None => {
+                self.lines.push("".to_owned());
                 println!("no_file\r");
             },
             Some(file) => {
@@ -61,12 +92,14 @@ impl WindowState {
     pub fn process_key(&mut self) -> Option<()>{
         const K_KEYPRESS:u8 = b'k' as u8;
         const J_KEYPRESS:u8 = b'j' as u8;
+        /*
         const H_KEYPRESS:u8 = b'h' as u8;
         const L_KEYPRESS:u8 = b'l' as u8;
         const M_KEYPRESS:u8 = b'm' as u8;
         const COMA_KEYPRESS:u8 = b',' as u8;
         const DOLLAR_SIGN_KEYPRESS:u8 = b'$' as u8;
         const NUMBER_0_KEYPRESS:u8 = b'0' as u8;
+        */
         
         match self.read_key() {
             helper_structs::KeyCode::Letter(data) => {
@@ -75,11 +108,14 @@ impl WindowState {
                         return None //panic!("quitt {} {}", value, b'0' as u8 as u32);
                     },
                     K_KEYPRESS => {
-                        self.move_cursor(helper_structs::MoveCommand::Arrow(helper_structs::Arrow::Up));
+                        self.cursor_visual.rows -= 1;
+                        //self.move_cursor(helper_structs::MoveCommand::Arrow(helper_structs::Arrow::Up));
                     },
                     J_KEYPRESS => {
-                        self.move_cursor(helper_structs::MoveCommand::Arrow(helper_structs::Arrow::Down));
+                        self.cursor_visual.rows += 1;
+                        //self.move_cursor(helper_structs::MoveCommand::Arrow(helper_structs::Arrow::Down));
                     },
+                    /*
                     H_KEYPRESS => {
                         self.move_cursor(helper_structs::MoveCommand::Arrow(helper_structs::Arrow::Left));
                     },
@@ -98,6 +134,7 @@ impl WindowState {
                     NUMBER_0_KEYPRESS => {
                         self.move_cursor(helper_structs::MoveCommand::Command(helper_structs::CommandMovement::StartOfLine));
                     }
+                    */
                     _ => {
                         
                         if g_libc::is_cntrl(data.try_into().unwrap()) {
@@ -133,14 +170,14 @@ impl WindowState {
                         }
                     },
                     Right => {
-                        if self.cursor_doc.cols < (self.buffer_size.cols-u16::from(self.margins_left)).into() {
+                        if self.cursor_doc.cols < (self.terminal_size.cols-u16::from(self.margins_left)).into() {
                             if self.lines[self.cursor_doc.rows+self.doc_start.rows-1].len() > usize::from(self.cursor_doc.cols) {
                                 self.cursor_doc.cols += 1;
                             }
                         }
                     },
                     Down => {
-                        if self.doc_start.rows+self.cursor_doc.rows < self.lines.len() && usize::from(self.buffer_size.rows-u16::from(self.margins_bottom)) > self.cursor_doc.rows {
+                        if self.doc_start.rows+self.cursor_doc.rows < self.lines.len() && usize::from(self.terminal_size.rows-u16::from(self.margins_bottom)) > self.cursor_doc.rows {
                             self.cursor_doc.rows += 1;
                         } 
                     },
@@ -235,7 +272,7 @@ impl WindowState {
     pub fn get_size(&mut self) {
         let mut win_size = g_libc::WinSize::new();
         if let Ok(_) = win_size.io_ctl(*self.term_fd, g_libc::WinSizeRequest::TIOCGWINSZ) {
-            win_size.get_window_size(&mut self.buffer_size.rows, &mut self.buffer_size.cols);
+            win_size.get_window_size(&mut self.terminal_size.rows, &mut self.terminal_size.cols);
             self.margins_left = 3;
             self.margins_bottom = 2;
             return;
@@ -250,7 +287,7 @@ impl WindowState {
 
     pub fn render_screen(&mut self) {
         
-        let buffer_rows = self.buffer_size.rows-u16::from(self.margins_bottom);
+        let buffer_rows = self.terminal_size.rows-u16::from(self.margins_bottom);
         
         self.append_buffer.clear();
         
@@ -258,30 +295,52 @@ impl WindowState {
         
         for line in 0..buffer_rows {
             self.append_buffer.push_str("\x1b[K");
-            self.append_buffer.push_str(" ~ ");
+            self.append_buffer.push_str(&format!("{}\t~", line.to_string()));
             
+            
+            /*
             let line_index = usize::from(line)+self.doc_start.rows;
+            i32::from(self.terminal_size.rows/2)+i32::from(self.cursor_visual.rows),
+            */
+            let line_index = i32::from(line)-(i32::from(self.terminal_size.rows/2)+i32::from(self.cursor_visual.rows));
+            if line_index >= 0 {
+                self.append_buffer.push_str(&line_index.to_string());
+            }
+            /*
             if self.lines.len() > line_index {
                 
-                self.append_buffer.push_str(&self.lines[usize::from(line_index)]);
+                let line_ref = &self.lines[usize::from(line_index)];
+                let line_size = line_ref.len();
+                let line_print_len = if line_size < 10 {
+                    line_size
+                } else {
+                    10
+                };
+                
+                self.append_buffer.push_str(&line_ref[0..line_print_len]);
                 /*
-                let lines_to_print = if self.lines[usize::from(line_index)].len() <= self.buffer_size.rows.into() {
+                let lines_to_print = if self.lines[usize::from(line_index)].len() <= self.terminal_size.rows.into() {
                     &self.lines[usize::from(line_index)]
                 } else {
-                    &self.lines[usize::from(line_index)][0..self.buffer_size.rows.into()]
+                    &self.lines[usize::from(line_index)][0..self.terminal_size.rows.into()]
                 };
                 self.append_buffer.push_str(lines_to_print);
                 */
                 
             }
             
+            */
             if line != buffer_rows-1 {
                 self.append_buffer.push_str("\r\n");
             }
         } 
         
-        self.append_buffer.push_str("\x1b[42m\r\n");
-        for _ in 0..self.buffer_size.cols {
+        //
+        // --------- line
+        //
+        
+        self.append_buffer.push_str("\x1b[45m\r\n");
+        for _ in 0..self.terminal_size.cols {
             self.append_buffer.push(' ');
         }
         self.append_buffer.push_str("\x1b[49m");
@@ -290,15 +349,24 @@ impl WindowState {
         
         //self.append_buffer.push_str("\r\n\x1b[42m Normal \x1b[47m                                                \x1b[49m");
         
+        //
+        // --------- cursor
+        //
+        /*
         let cursor_column = if self.cursor_doc.cols == 0 {
             usize::from(self.margins_left)+1
         } else {
             usize::from(self.margins_left)+self.cursor_doc.cols
         };
-        self.append_buffer.push_str(&format!("\x1b[{};{}H", self.cursor_doc.rows, cursor_column));
+        */
+        
+        self.append_buffer.push_str(&format!("\x1b[{};{}H", i32::from(self.terminal_size.rows/2)+i32::from(self.cursor_visual.rows)+1, 1));
         
         let _ = unistd::write(*self.term_fd, &self.append_buffer.as_bytes());
     }
+    
+    
+    
 }
 
 fn read_lines(file:&str) -> Vec<String> {

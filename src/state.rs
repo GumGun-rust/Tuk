@@ -23,7 +23,7 @@ impl Drop for State{
             let _ = unistd::write(*self.term_fd, &"\x1b[2J".as_bytes());
             let _ = unistd::write(*self.term_fd, &"\x1b[H".as_bytes());
             //dbg!(&self.window_state.raw_terminal_size);
-            dbg!(&self.window_state.buffer_size);
+            dbg!(&self.window_state.terminal_size);
             dbg!(&self.window_state.doc_start);
             dbg!(&self.window_state.cursor_doc);
             //print!("hola desde drop\r\nrows: {}\r\ncols: {}\r\n", self.window_state.raw_terminal_size.rows, self.window_state.raw_terminal_size.cols);

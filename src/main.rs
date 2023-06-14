@@ -29,13 +29,13 @@ fn main() {
 
     let w_s = &mut state.window_state;
     
-    let file_ = if args.len() > 1 {
+    let file = if args.len() > 1 {
         Some(args[1].as_ref()) 
     } else {
         None
     };
     
-    w_s.start_editor(file_);
+    w_s.start_editor(file);
     
     //state.render_screen(state.window_state.rows);
     loop {
