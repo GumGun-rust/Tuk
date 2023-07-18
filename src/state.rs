@@ -1,10 +1,11 @@
 use nix::unistd;
 use super::{
-    g_libc,
     g_libc::{
+        self,
         TcSetAttrAction,
     },
 };
+
 use std::rc::Rc;
 
 #[derive(Debug)]
@@ -22,11 +23,6 @@ impl Drop for State{
             self.window_state.clear_screen();
             let _ = unistd::write(*self.term_fd, &"\x1b[2J".as_bytes());
             let _ = unistd::write(*self.term_fd, &"\x1b[H".as_bytes());
-            //dbg!(&self.window_state.raw_terminal_size);
-            dbg!(&self.window_state.terminal_size);
-            dbg!(&self.window_state.doc_start);
-            dbg!(&self.window_state.cursor_doc);
-            //print!("hola desde drop\r\nrows: {}\r\ncols: {}\r\n", self.window_state.raw_terminal_size.rows, self.window_state.raw_terminal_size.cols);
         } else {
             print!("non regular exit\r\n");
         }
@@ -45,7 +41,7 @@ impl State {
         }
     }
     
-    pub fn start_editor(&mut self) {
+    pub fn init_editor(&mut self) {
         self.window_state.get_size();
     }
 

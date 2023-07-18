@@ -8,12 +8,18 @@ mod libc_safe;
 use libc_safe as g_libc;
 
 mod helper_structs;
+use helper_structs as h_s;
+
+mod keyboard;
+use keyboard as kb;
 
 mod state;
 use state::State;
 
 mod win_state;
 use win_state::WindowState;
+
+mod buffer;
 
 use g_libc::{
     STDIN_FILENO,
@@ -25,7 +31,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     //println!("{:?}", args);
     state.enable_raw_mode();
-    state.start_editor();
+    state.init_editor();
 
     let w_s = &mut state.window_state;
     
