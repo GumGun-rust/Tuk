@@ -8,6 +8,10 @@ use std::{
     io,
     fs,
     cmp,
+    path::PathBuf,
+    ffi::OsStr,
+
+
 };
 
 #[derive(Default, Debug)]
@@ -20,11 +24,11 @@ enum BoolConfig {
 #[allow(dead_code)]
 #[derive(Default, Debug)]
 enum Numeration {
-    #[default]
     Default,
     No,
     Absolute,
     Relative,
+    #[default]
     Both,
 }
 
@@ -40,7 +44,9 @@ pub struct Config {
 #[derive(Default, Debug)]
 pub struct Buffer {
     pub hidden: bool,
+    
     pub name: String,
+    pub file_path: PathBuf,
     
     pub offset: h_s::TPos<u16>,
     pub buffer_size: h_s::TPos<u16>,
@@ -85,19 +91,29 @@ impl Buffer {
         };
         */
         
-        let lines_holder = match opening_file {
+        let lines_holder;
+        let file_path;
+        let name;
+        
+        match opening_file {
             None => {
-                vec!["".to_owned()]
+                lines_holder = vec!["".to_owned()];
+                file_path = "".to_string();
+                name = "".to_string();
             },
             Some(file) => {
-                Buffer::read_lines(file)
+                lines_holder = Buffer::read_lines(file);
+                let file_path = PathBuf::from(file.to_string());
+                name = file_path.file_name().unwrap().to_string_lossy().to_string();
             }
-        };
+        }
         
         let mut holder = Buffer{
             hidden: false,
-            name: "".to_owned(),
+            
+            name: name,
             offset: offset,
+            
             buffer_size: term_size,
             doc_offset: doc_offset,
             lines: lines_holder,
@@ -109,6 +125,8 @@ impl Buffer {
         holder.update_cursor_location();
         holder
     }
+    
+    
     
     pub fn process_key_visual(&mut self, key:keyboard::KeyCode) {
         match key {
@@ -122,6 +140,12 @@ impl Buffer {
                         self.cmd_move_cursor(keyboard::Arrow::Up);
                         //panic!("k");
                     }
+                    b'l' => {
+                        self.cmd_move_cursor(keyboard::Arrow::Right);
+                    }
+                    b'h' => {
+                        self.cmd_move_cursor(keyboard::Arrow::Left);
+                    }
                     _ => {
                         
                     }
@@ -133,16 +157,27 @@ impl Buffer {
         }
     }
     
+    
+
     pub fn process_key_insert(&mut self, key:keyboard::KeyCode) {
         match key {
             keyboard::KeyCode::Letter(letter) => {
-                
+                match letter {
+                    b'a' => {
+                        self.lines[usize::try_from(self.doc_position.rows).unwrap()].insert(self.doc_position.cols, 'a');
+                        //panic!("a key");
+                    }
+                    _ => {
+                        
+                    }
+                }
             }
             keyboard::KeyCode::Arrow(arrow) => {
                 //self.cmd_move_doc(arrow);
             }
         }
     }
+    
     
     
     fn cmd_move_doc(&mut self, arrow:keyboard::Arrow) -> Option<()> {
@@ -165,6 +200,10 @@ impl Buffer {
                 */
                 
             }
+            keyboard::Arrow::Left => {
+            }
+            keyboard::Arrow::Right => {
+            }
             _ => {
                 todo!("no side arrows");
             }
@@ -173,9 +212,12 @@ impl Buffer {
         None
     }
     
+    
+    
     fn cmd_move_cursor(&mut self, arrow:keyboard::Arrow) -> Option<()> {
+        use keyboard::Arrow::*;
         match arrow {
-            keyboard::Arrow::Up => {
+            Up => {
                 self.doc_position.rows -= 1;
                 /*
                 panic!("{} {} {} {}", self.buffer_size.rows, self.doc_offset.rows, self.doc_position.rows, self.doc_offset.rows-self.doc_position.rows);
@@ -187,27 +229,40 @@ impl Buffer {
                 */
                 
             }
-            keyboard::Arrow::Down => {
+            Down => {
                 self.doc_position.rows += 1;
                 /*
                 self.doc_position.rows += 1;
                 self.doc_offset.rows += 1;
                 */
             }
-            _ => {
-                todo!("no side arrows");
+            Left => {
+                if self.doc_position.cols != 0 {
+                    self.doc_position.cols -= 1;
+                }
+                //todo!("no side arrow left");
+            }
+            Right => {
+                if self.doc_position.cols <= self.lines[self.doc_position.rows].len()-1 {
+                    self.doc_position.cols += 1;
+                }
+                //todo!("no side arrows right");
             }
         }
         self.update_cursor_location();
         None
     }
     
+
+    
     fn update_cursor_location(&mut self) {
         self.doc_cursor_visual = h_s::TPos::<u16>{
-            cols: u16::from(self.margin_left),
+            cols: u16::from(self.margin_left)+u16::try_from(self.doc_position.cols).unwrap(),
             rows: u16::try_from(self.buffer_size.rows).unwrap() - (u16::try_from(self.doc_offset.rows).unwrap() - u16::try_from(self.doc_position.rows).unwrap())
         };
     }
+    
+    
     
     pub fn get_cursor_location(&mut self) -> h_s::TPos<u16> {
         //panic!("{}", self.doc_offset.rows);
@@ -220,6 +275,8 @@ impl Buffer {
         */
     }
     
+    
+
     pub fn update_visual_buffer(&mut self) -> &String {
         let mut deco = String::new();
         let pivot_anchor = self.offset+1;
@@ -232,45 +289,40 @@ impl Buffer {
         self.visual_buffer.push_str(&format!("\x1b[{};{}H", pivot_anchor.rows, pivot_anchor.cols));
         
         for line in (0..=self.buffer_size.rows).rev() {
-            /*
-            let real_line = i64::try_from(self.doc_position.rows).unwrap()-i64::try_from(line).unwrap();
-            let real_line = i64::try_from(self.doc_offset.rows).unwrap()-i64::try_from(line).unwrap()-i64::try_from(self.doc_position.rows).unwrap();
-            self.visual_buffer.push_str(DECO);
-            self.visual_buffer.push_str(&real_line.to_string());
-            self.visual_buffer.push_str("\t\t");
-            self.visual_buffer.push_str(&line.to_string());
-            self.visual_buffer.push_str("\t\t");
-            self.visual_buffer.push_str(&self.doc_position.rows.to_string());
-            self.visual_buffer.push_str("\t\t");
-            self.visual_buffer.push_str(&self.doc_offset.rows.to_string());
-            self.visual_buffer.push_str(&next_line);
-            */
-            
             let real_line = i64::try_from(self.doc_offset.rows).unwrap()-i64::try_from(line).unwrap()/*-i64::try_from(self.doc_position.rows).unwrap()*/;
             
-            let doc_line = match real_line {
+            match real_line {
                 current_line if current_line < 0 => {
                     self.visual_buffer.push_str("\x1b[42m");
-                    false
+                    self.get_column_decoration(&mut deco, real_line, true);
+                    self.visual_buffer.push_str(&deco);
+                    for _ in 0..self.buffer_size.cols-u16::from(self.margin_left)+1 {
+                        self.visual_buffer.push(' ');
+                    }
                 }
                 current_line if usize::try_from(current_line).unwrap() < self.lines.len() => {
                     self.visual_buffer.push_str("\x1b[49m");
-                    true
+                    self.get_column_decoration(&mut deco, real_line, true);
+                    self.visual_buffer.push_str(&deco);
+                    
+                    self.visual_buffer.push_str(&self.lines[usize::try_from(real_line).unwrap()]);
+                    
+                    for _ in 0..usize::from(self.buffer_size.cols)-usize::from(self.margin_left)+1-self.lines[usize::try_from(real_line).unwrap()].len() {
+                        self.visual_buffer.push(' ');
+                    }
+                    
                 }
                 current_line => {
                     self.visual_buffer.push_str("\x1b[44m");
-                    false
+                    self.get_column_decoration(&mut deco, real_line, true);
+                    self.visual_buffer.push_str(&deco);
+                    for _ in 0..self.buffer_size.cols-u16::from(self.margin_left)+1 {
+                        self.visual_buffer.push(' ');
+                    }
                 }
-            };
+            }
             
             /*
-            for iter in 0..self.margin_left{
-                self.visual_buffer.push('@');
-            }
-            */
-            
-            self.get_column_decoration(&mut deco, real_line, doc_line);
-            self.visual_buffer.push_str(&deco);
             let data = real_line.to_string();
             self.visual_buffer.push_str(&data);
             for _iter in 0..10-data.len() {
@@ -286,6 +338,8 @@ impl Buffer {
             for _iter in 0..10-data.len() {
                 self.visual_buffer.push_str(" ");
             }
+            */
+            
             self.visual_buffer.push_str(&next_line);
             
         }
@@ -293,6 +347,8 @@ impl Buffer {
         &self.visual_buffer
     }
     
+    
+
     fn get_column_decoration(&self, deco:&mut String, line:i64, inside_doc:bool) {
         use Numeration::*;
         deco.clear();
@@ -368,6 +424,14 @@ impl Buffer {
         
     }
     
+    
+
+    pub fn get_buffer_name(&self) -> &String {
+        &self.name
+    }
+    
+    
+    
     fn update_margin_left(&mut self) {
         use Numeration::*;
         let string = self.lines.len().to_string();
@@ -381,6 +445,8 @@ impl Buffer {
         //panic!("{} {}", self.margin_left, string);
         
     }
+    
+    
     
     fn read_lines(file:&str) -> Vec<String> {
         let file = fs::File::open(file).unwrap();

@@ -10,6 +10,7 @@ use super::{
 
 use std::{
     rc::Rc,
+
 };
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -38,8 +39,9 @@ pub struct WindowState {
 
 impl WindowState {
     
+    
     pub fn new(term_fd: Rc<i32>) -> Self {
-        let mut buffer_vec_holder:Vec<buffer::Buffer> = Vec::new();
+        let buffer_vec_holder:Vec<buffer::Buffer> = Vec::new();
         let holder = Self{
             term_fd: term_fd, 
             main_buffers: buffer_vec_holder,
@@ -48,14 +50,17 @@ impl WindowState {
         holder
     }
     
+    
+
     pub fn start_editor(&mut self, opening_file:Option<&str>) {
         let buffer_size = h_s::TPos::<u16>{
-            rows: self.terminal_size.rows-2,
-            ..self.terminal_size
+            rows: self.terminal_size.rows-7,
+            cols: self.terminal_size.cols,//-30,
+            //..self.terminal_size
         };
         let offset = h_s::TPos::<u16>{
+            rows: 0,
             cols: 0,
-            rows: 0
         };
         let buffer_holder = buffer::Buffer::new(
             offset,
@@ -70,6 +75,8 @@ impl WindowState {
         
         
     }
+    
+
     
     pub fn process_key(&mut self) -> Option<()>{
         //return Some(());
@@ -102,6 +109,8 @@ impl WindowState {
         //println!("\r\n{:?}", read_key);
     }
 
+    
+
     pub fn read_key(&self) -> Option<kb::KeyCode>/*Option<i64>*/ {
         let mut buffer = [0u8];
         match unistd::read(*self.term_fd, &mut buffer[..]) {
@@ -124,6 +133,8 @@ impl WindowState {
         }
     }
     
+    
+
     fn handle_esc_code(&self) -> kb::EscapeCode {
         let mut buffer = [0u8;3];
         match unistd::read(*self.term_fd, &mut buffer[..]) {
@@ -152,6 +163,8 @@ impl WindowState {
         
     }
 
+    
+
     pub fn get_size(&mut self) {
         let mut win_size = g_libc::WinSize::new();
         if let Ok(_) = win_size.io_ctl(*self.term_fd, g_libc::WinSizeRequest::TIOCGWINSZ) {
@@ -163,10 +176,14 @@ impl WindowState {
         panic!("ioctl Not Supported");
     }
     
+    
+
     pub fn clear_screen(&mut self) {
         
         panic!();
     }
+
+    
 
     pub fn render_screen(&mut self) {
         
@@ -182,6 +199,7 @@ impl WindowState {
         //let _ = unistd::write(*self.term_fd, &self.append_buffer.as_bytes());
         
         let cursor_location = self.main_buffers[self.current_buff].get_cursor_location();
+        //let file_name = self.main_buffers[self.current_buff].get_buffer_name().clone();
         
         self.status_bar();
         
@@ -191,13 +209,19 @@ impl WindowState {
         return;
     }
     
+    
+
     fn status_bar(&mut self) {
         self.append_buffer.push_str(&format!("\x1b[{:?};0H", self.terminal_size.rows-1));
         match self.mode {
             EditorMode::Normal => {
                 let normal_count = 8;
                 self.append_buffer.push_str("\x1b[1;38;5;22;48;5;148m NORMAL \x1b[0;39;48;5;244m");
-                for columns in 0..self.terminal_size.cols-normal_count {
+                let buffer_name = self.main_buffers[self.current_buff].get_buffer_name();
+                
+                self.append_buffer.push_str(buffer_name);
+                self.append_buffer.push_str("\x1b[0;39;48;5;238m");
+                for columns in 0..self.terminal_size.cols-normal_count-u16::try_from(buffer_name.len()).unwrap() {
                     self.append_buffer.push(' ');
                 }
                 self.append_buffer.push_str("\x1b[49m");
@@ -218,5 +242,7 @@ impl WindowState {
         
     }
     
+    
+
 }
 

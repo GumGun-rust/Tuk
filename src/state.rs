@@ -6,7 +6,10 @@ use super::{
     },
 };
 
-use std::rc::Rc;
+use std::{
+    rc::Rc,
+    path::PathBuf,
+};
 
 #[derive(Debug)]
 pub struct State {
@@ -14,6 +17,7 @@ pub struct State {
     pub regular_exit: bool,
     pub starting_termios: g_libc::TermIOS,
     pub window_state: super::WindowState,
+    pub initial_wd: PathBuf,
 }
 
 impl Drop for State{
@@ -33,10 +37,12 @@ impl State {
     
     pub fn new(term_fd: i32) -> Self {
         let term_fd = Rc::new(term_fd);
+        let initial_wd = std::env::current_exe().unwrap();
         State{
             term_fd: term_fd.clone(),
             starting_termios: g_libc::TermIOS::new(),
             window_state: super::WindowState::new(term_fd),
+            initial_wd: initial_wd,
             regular_exit: false, 
         }
     }
