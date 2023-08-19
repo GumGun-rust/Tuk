@@ -12,15 +12,15 @@ use std::{
 };
 
 #[derive(Debug)]
-pub struct State {
+pub struct State<'a> {
     pub term_fd: Rc<i32>,
     pub regular_exit: bool,
     pub starting_termios: g_libc::TermIOS,
-    pub window_state: super::WindowState,
+    pub window_state: super::WindowState<'a>,
     pub initial_wd: PathBuf,
 }
 
-impl Drop for State{
+impl Drop for State<'_> {
     fn drop(&mut self) {
         self.disable_raw_mode();
         if self.regular_exit {
@@ -33,7 +33,7 @@ impl Drop for State{
     }
 }
 
-impl State {
+impl State<'_> {
     
     pub fn new(term_fd: i32) -> Self {
         let term_fd = Rc::new(term_fd);

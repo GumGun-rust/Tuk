@@ -1,8 +1,10 @@
 use nix::unistd;
 
 use super::{
+    h_s::{
+        TPos,
+    },
     g_libc,
-    h_s,
     kb,
     buffer,
     keyboard,
@@ -28,16 +30,16 @@ pub enum StatusBar {
 }
 
 #[derive(Default, Debug)]
-pub struct WindowState {
+pub struct WindowState<'a> {
     pub term_fd: Rc<i32>,
     pub mode: EditorMode,
-    pub terminal_size: h_s::TPos<u16>,
+    pub terminal_size: TPos<u16>,
     pub append_buffer: String,
     pub current_buff: usize,
-    pub main_buffers: Vec<buffer::Buffer>,
+    pub main_buffers: Vec<buffer::Buffer<'a>>,
 }
 
-impl WindowState {
+impl WindowState<'_> {
     
     
     pub fn new(term_fd: Rc<i32>) -> Self {
@@ -53,12 +55,12 @@ impl WindowState {
     
 
     pub fn start_editor(&mut self, opening_file:Option<&str>) {
-        let buffer_size = h_s::TPos::<u16>{
-            rows: self.terminal_size.rows-7,
+        let buffer_size = TPos::<u16>{
+            rows: self.terminal_size.rows-2,
             cols: self.terminal_size.cols,//-30,
             //..self.terminal_size
         };
-        let offset = h_s::TPos::<u16>{
+        let offset = TPos::<u16>{
             rows: 0,
             cols: 0,
         };
@@ -79,6 +81,13 @@ impl WindowState {
 
     
     pub fn process_key(&mut self) -> Option<()>{
+        match self.read_key() {
+            Some(read_key) => {
+                self.main_buffers[self.current_buff].process_key_visual(read_key);
+            },
+            None => {}
+        }
+        /*
         //return Some(());
         match self.mode {
             EditorMode::Normal => {
@@ -104,6 +113,7 @@ impl WindowState {
                 }
             }
         }
+        */
         
         Some(())
         //println!("\r\n{:?}", read_key);
@@ -213,6 +223,18 @@ impl WindowState {
 
     fn status_bar(&mut self) {
         self.append_buffer.push_str(&format!("\x1b[{:?};0H", self.terminal_size.rows-1));
+        
+        let status_line_data = self.main_buffers[self.current_buff].get_status_bar();
+        
+        
+        
+        self.append_buffer.push_str(&format!("{}{}{} {} {}", status_line_data.mode_color, status_line_data.mode_text, status_line_data.file_color, status_line_data.file_text, status_line_data.middle_color));
+        for columns in 2..usize::try_from(self.terminal_size.cols).unwrap()-status_line_data.mode_text.len()-status_line_data.file_text.len() {
+            self.append_buffer.push(' ');
+        }
+        self.append_buffer.push_str("\x1b[49m");
+        
+        /*
         match self.mode {
             EditorMode::Normal => {
                 let normal_count = 8;
@@ -239,6 +261,7 @@ impl WindowState {
                 //self.append_buffer.push_str("       \x1b[49m");
             }
         }
+        */
         
     }
     

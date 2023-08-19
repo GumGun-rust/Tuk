@@ -1,6 +1,9 @@
 use super::{
+    h_s::{
+        FileMeta,
+        TPos,
+    },
     //g_libc,
-    h_s,
     keyboard,
 };
 
@@ -11,8 +14,24 @@ use std::{
     path::PathBuf,
     ffi::OsStr,
 
-
 };
+
+
+#[derive(Default, Debug, Clone)]
+pub struct StatusBarData<'a> {
+    pub mode_color: &'a str,
+    pub mode_text: &'a str,
+    pub file_color: &'a str,
+    pub file_text: &'a str,
+    pub middle_color: &'a str,
+}
+
+#[derive(Default, Debug, Clone, Copy)]
+pub enum EditorMode {
+    #[default]
+    Normal,
+    Insert,
+}
 
 #[derive(Default, Debug)]
 enum BoolConfig {
@@ -42,34 +61,40 @@ pub struct Config {
 
 
 #[derive(Default, Debug)]
-pub struct Buffer {
+pub struct Buffer<'a> {
     pub hidden: bool,
+    
+    pub mode: EditorMode,
     
     pub name: String,
     pub file_path: PathBuf,
     
-    pub offset: h_s::TPos<u16>,
-    pub buffer_size: h_s::TPos<u16>,
+    pub offset: TPos<u16>,
+    pub buffer_size: TPos<u16>,
     
-    pub doc_offset: h_s::TPos<usize>,
+    pub doc_offset: TPos<usize>,
     
-    pub doc_position: h_s::TPos<usize>,
+    pub doc_position: TPos<usize>,
     //position in cursor
-    pub doc_cursor_visual: h_s::TPos<u16>,
+    pub doc_cursor_visual: TPos<u16>,
     //visual position of the cursor relative to the offset
     
     pub margin_left:u8,
     
-    pub lines: Vec<String>,
+    pub lines: FileMeta,
     
     pub visual_buffer: String,
+    
+    pub status_bar: String,
+    
+    pub status_bar_data: StatusBarData<'a>,
     
     config: Config,
     
 }
 
-impl Buffer {
-    pub fn new(offset:h_s::TPos<u16>, term_size:h_s::TPos<u16>, opening_file:Option<&str>) -> Self {
+impl Buffer<'_> {
+    pub fn new(offset:TPos<u16>, term_size:TPos<u16>, opening_file:Option<&str>) -> Self {
         //get to index 0 
         //term_size -= 1;
         
@@ -78,14 +103,14 @@ impl Buffer {
         term_size -= 7;
         */
         
-        let doc_offset = h_s::TPos::<usize>{
-            //rows: usize::from(term_size.rows)/2,
-            rows: usize::from(term_size.rows)-2,
+        let doc_offset = TPos::<usize>{
+            rows: usize::from(term_size.rows)/2,
+            //rows: usize::from(term_size.rows)-2,
             cols: usize::from(term_size.cols)
         };
         
         /*
-        let doc_cursor_visual = h_s::TPos::<u16>{
+        let doc_cursor_visual = TPos::<u16>{
             rows: term_size.rows/2+1,
             cols: 4+1
         };
@@ -97,12 +122,12 @@ impl Buffer {
         
         match opening_file {
             None => {
-                lines_holder = vec!["".to_owned()];
+                lines_holder = FileMeta::new();
                 file_path = "".to_string();
                 name = "".to_string();
             },
             Some(file) => {
-                lines_holder = Buffer::read_lines(file);
+                lines_holder = FileMeta::read_lines(file);
                 let file_path = PathBuf::from(file.to_string());
                 name = file_path.file_name().unwrap().to_string_lossy().to_string();
             }
@@ -123,9 +148,21 @@ impl Buffer {
         };
         holder.update_margin_left();
         holder.update_cursor_location();
+        holder.update_status_bar();
         holder
     }
     
+    pub fn process_key(&mut self, key:keyboard::KeyCode) {
+        
+        match self.mode {
+            EditorMode::Normal => {
+                self.process_key_visual(key);
+            }
+            EditorMode::Insert => {
+                self.process_key_insert(key);
+            }
+        }
+    }
     
     
     pub fn process_key_visual(&mut self, key:keyboard::KeyCode) {
@@ -142,9 +179,15 @@ impl Buffer {
                     }
                     b'l' => {
                         self.cmd_move_cursor(keyboard::Arrow::Right);
-                    }
-                    b'h' => {
+                    } b'h' => {
                         self.cmd_move_cursor(keyboard::Arrow::Left);
+                    }
+                    b'w' => {
+                        self.write_file();
+                    }
+                    b'i' => {
+                        self.mode = EditorMode::Insert;
+                        self.update_status_bar();
                     }
                     _ => {
                         
@@ -163,8 +206,14 @@ impl Buffer {
         match key {
             keyboard::KeyCode::Letter(letter) => {
                 match letter {
-                    b'a' => {
-                        self.lines[usize::try_from(self.doc_position.rows).unwrap()].insert(self.doc_position.cols, 'a');
+                    letter => {
+                    //b'a' => {
+                        //let location = TPos::new(self.doc_position.rows, self.doc_position.cols);
+                        self.lines.insert(self.doc_position, char::from(letter)).unwrap();
+                        self.doc_position.cols += 1; 
+                        self.doc_cursor_visual.cols += 1; 
+                        
+                        //self.lines[self.doc_position.rows].insert(self.doc_position.cols, 'a');
                         //panic!("a key");
                     }
                     _ => {
@@ -256,7 +305,7 @@ impl Buffer {
 
     
     fn update_cursor_location(&mut self) {
-        self.doc_cursor_visual = h_s::TPos::<u16>{
+        self.doc_cursor_visual = TPos::<u16>{
             cols: u16::from(self.margin_left)+u16::try_from(self.doc_position.cols).unwrap(),
             rows: u16::try_from(self.buffer_size.rows).unwrap() - (u16::try_from(self.doc_offset.rows).unwrap() - u16::try_from(self.doc_position.rows).unwrap())
         };
@@ -264,7 +313,7 @@ impl Buffer {
     
     
     
-    pub fn get_cursor_location(&mut self) -> h_s::TPos<u16> {
+    pub fn get_cursor_location(&mut self) -> TPos<u16> {
         //panic!("{}", self.doc_offset.rows);
         
         self.doc_cursor_visual + self.offset + 1
@@ -447,13 +496,49 @@ impl Buffer {
     }
     
     
-    
-    fn read_lines(file:&str) -> Vec<String> {
-        let file = fs::File::open(file).unwrap();
-        let buf_reader = io::BufReader::new(file); 
-        let lines = io::BufRead::lines(buf_reader);
-        lines.collect::<Result<_, _>>().unwrap()
+    /*
+    pub mode_color: &'a str,
+    pub mode_text: &'a str,
+    pub file_color: &'a str,
+    pub file_text: &'a str,
+    pub middle_color: &'a str,
+    */
+
+    fn update_status_bar(&mut self) {
+        
+        self.status_bar.clear();
+        match self.mode {
+            EditorMode::Normal => {
+                self.status_bar_data.mode_color = "\x1b[1;38;5;22;48;5;148m";
+                self.status_bar_data.mode_text = " NORMAL ";
+                self.status_bar_data.file_color = "\x1b[0;39;48;5;244m";
+                self.status_bar_data.file_text = "test file name";
+                self.status_bar_data.middle_color = "\x1b[0;39;48;5;238m";
+            },
+            EditorMode::Insert => {
+                self.status_bar_data.mode_color = "\x1b[1;38;5;196;48;5;208m";
+                self.status_bar_data.mode_text = " INSERT ";
+                self.status_bar_data.file_color = "\x1b[0;39;48;5;185m";
+                self.status_bar_data.file_text = "test insert name";
+                self.status_bar_data.middle_color = "\x1b[0;39;48;5;238m";
+            }
+        }
+        
     }
 
+
+
+    pub fn get_status_bar(&self) -> &StatusBarData {
+        &self.status_bar_data
+    }
+    
+
+
+    fn write_file(&mut self) {
+        self.lines.save();
+    }
+
+    
+    
 }
 
