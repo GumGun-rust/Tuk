@@ -12,6 +12,7 @@ pub struct TPos<T> {
     pub cols: T,
 }
 
+/*
 impl<T> TPos<T> {
     pub fn new(rows:T, cols:T) -> Self {
         Self{
@@ -20,6 +21,7 @@ impl<T> TPos<T> {
         }
     }
 }
+*/
 
 impl<T:Clone> Clone for TPos<T>{
     fn clone(&self) -> Self {

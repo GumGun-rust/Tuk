@@ -7,12 +7,6 @@ use std::{
         Index,
         IndexMut,
     },
-    os::{
-        fd::{
-            RawFd,
-            IntoRawFd,
-        },
-    },
     io::{
         self,
         Write,

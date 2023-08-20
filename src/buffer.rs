@@ -4,27 +4,25 @@ use super::{
         TPos,
     },
     //g_libc,
-    keyboard,
+    kb,
 };
 
 use std::{
-    io,
-    fs,
     cmp,
     path::PathBuf,
-    ffi::OsStr,
 
 };
 
+use arrayvec::ArrayString;
 
 #[derive(Default, Debug, Clone)]
-pub struct StatusBarData<'a> {
-    pub mode_color: &'a str,
-    pub mode_text: &'a str,
-    pub file_color: &'a str,
-    pub file_text: &'a str,
-    pub middle_color: &'a str,
+pub struct StatusBarData {
+    pub mode_color: ArrayString<32>,
+    pub mode_text: ArrayString<32>,
+    pub file_color: ArrayString<32>,
+    pub middle_color: ArrayString<32>,
 }
+
 
 #[derive(Default, Debug, Clone, Copy)]
 pub enum EditorMode {
@@ -33,11 +31,13 @@ pub enum EditorMode {
     Insert,
 }
 
-#[derive(Default, Debug)]
-enum BoolConfig {
-    #[default]
-    No,
-    Yes,
+impl From<EditorMode> for usize {
+    fn from(mode:EditorMode) -> usize {
+        match mode {
+            EditorMode::Normal => 0,
+            EditorMode::Insert => 1,
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -54,30 +54,31 @@ enum Numeration {
 #[derive(Default, Debug)]
 pub struct Config {
     numeration: Numeration,
-    wrap: BoolConfig
+    wrap: bool
     
 }
 
 
 
 #[derive(Default, Debug)]
-pub struct Buffer<'a> {
+pub struct Buffer {
     pub hidden: bool,
     
     pub mode: EditorMode,
     
-    pub name: String,
-    pub file_path: PathBuf,
+    pub name: Option<String>,
+    pub file_path: Option<PathBuf>,
     
     pub offset: TPos<u16>,
     pub buffer_size: TPos<u16>,
     
     pub doc_offset: TPos<usize>,
     
-    pub doc_position: TPos<usize>,
     //position in cursor
-    pub doc_cursor_visual: TPos<u16>,
+    pub doc_position: TPos<usize>,
+    
     //visual position of the cursor relative to the offset
+    pub doc_cursor_visual: TPos<u16>,
     
     pub margin_left:u8,
     
@@ -85,15 +86,13 @@ pub struct Buffer<'a> {
     
     pub visual_buffer: String,
     
-    pub status_bar: String,
-    
-    pub status_bar_data: StatusBarData<'a>,
+    pub status_bar_data: Vec<StatusBarData>,
     
     config: Config,
     
 }
 
-impl Buffer<'_> {
+impl Buffer {
     pub fn new(offset:TPos<u16>, term_size:TPos<u16>, opening_file:Option<&str>) -> Self {
         //get to index 0 
         //term_size -= 1;
@@ -123,13 +122,14 @@ impl Buffer<'_> {
         match opening_file {
             None => {
                 lines_holder = FileMeta::new();
-                file_path = "".to_string();
-                name = "".to_string();
+                file_path = None;
+                name = None;//"".to_string();
             },
             Some(file) => {
                 lines_holder = FileMeta::read_lines(file);
-                let file_path = PathBuf::from(file.to_string());
-                name = file_path.file_name().unwrap().to_string_lossy().to_string();
+                let file_path_holder = PathBuf::from(file.to_string());
+                name = Some(file_path_holder.file_name().unwrap().to_string_lossy().to_string());
+                file_path = Some(file_path_holder);
             }
         }
         
@@ -137,6 +137,7 @@ impl Buffer<'_> {
             hidden: false,
             
             name: name,
+            file_path: file_path,
             offset: offset,
             
             buffer_size: term_size,
@@ -148,11 +149,11 @@ impl Buffer<'_> {
         };
         holder.update_margin_left();
         holder.update_cursor_location();
-        holder.update_status_bar();
+        holder.set_status_bar();
         holder
     }
     
-    pub fn process_key(&mut self, key:keyboard::KeyCode) {
+    pub fn process_key(&mut self, key:kb::KeyCode) {
         
         match self.mode {
             EditorMode::Normal => {
@@ -165,36 +166,35 @@ impl Buffer<'_> {
     }
     
     
-    pub fn process_key_visual(&mut self, key:keyboard::KeyCode) {
+    fn process_key_visual(&mut self, key:kb::KeyCode) {
         match key {
-            keyboard::KeyCode::Letter(letter) => {
+            kb::KeyCode::Letter(letter) => {
                 match letter {
                     b'j' => {
-                        self.cmd_move_cursor(keyboard::Arrow::Down);
+                        self.cmd_move_cursor(kb::Arrow::Down);
                         //panic!("r");
                     }
                     b'k' => {
-                        self.cmd_move_cursor(keyboard::Arrow::Up);
+                        self.cmd_move_cursor(kb::Arrow::Up);
                         //panic!("k");
                     }
                     b'l' => {
-                        self.cmd_move_cursor(keyboard::Arrow::Right);
+                        self.cmd_move_cursor(kb::Arrow::Right);
                     } b'h' => {
-                        self.cmd_move_cursor(keyboard::Arrow::Left);
+                        self.cmd_move_cursor(kb::Arrow::Left);
                     }
                     b'w' => {
                         self.write_file();
                     }
                     b'i' => {
                         self.mode = EditorMode::Insert;
-                        self.update_status_bar();
                     }
                     _ => {
                         
                     }
                 }
             }
-            keyboard::KeyCode::Arrow(arrow) => {
+            kb::KeyCode::Arrow(arrow) => {
                 self.cmd_move_doc(arrow);
             }
         }
@@ -202,10 +202,13 @@ impl Buffer<'_> {
     
     
 
-    pub fn process_key_insert(&mut self, key:keyboard::KeyCode) {
+    fn process_key_insert(&mut self, key:kb::KeyCode) {
         match key {
-            keyboard::KeyCode::Letter(letter) => {
+            kb::KeyCode::Letter(letter) => {
                 match letter {
+                    b'i' => {
+                        self.mode = EditorMode::Normal;
+                    }
                     letter => {
                     //b'a' => {
                         //let location = TPos::new(self.doc_position.rows, self.doc_position.cols);
@@ -216,12 +219,10 @@ impl Buffer<'_> {
                         //self.lines[self.doc_position.rows].insert(self.doc_position.cols, 'a');
                         //panic!("a key");
                     }
-                    _ => {
-                        
-                    }
                 }
             }
-            keyboard::KeyCode::Arrow(arrow) => {
+            kb::KeyCode::Arrow(arrow) => {
+                todo!("{:?}", arrow);
                 //self.cmd_move_doc(arrow);
             }
         }
@@ -229,9 +230,9 @@ impl Buffer<'_> {
     
     
     
-    fn cmd_move_doc(&mut self, arrow:keyboard::Arrow) -> Option<()> {
+    fn cmd_move_doc(&mut self, arrow:kb::Arrow) -> Option<()> {
         match arrow {
-            keyboard::Arrow::Up => {
+            kb::Arrow::Up => {
                 self.doc_offset.rows += 1;
                 self.doc_position.rows += 1;
                 /*
@@ -242,17 +243,19 @@ impl Buffer<'_> {
                 }
                 */
             }
-            keyboard::Arrow::Down => {
+            kb::Arrow::Down => {
                 self.doc_offset.rows -= 1;
                 self.doc_position.rows -= 1;
                 /*
                 */
                 
             }
-            keyboard::Arrow::Left => {
+            /*
+            kb::Arrow::Left => {
             }
-            keyboard::Arrow::Right => {
+            kb::Arrow::Right => {
             }
+            */
             _ => {
                 todo!("no side arrows");
             }
@@ -263,8 +266,8 @@ impl Buffer<'_> {
     
     
     
-    fn cmd_move_cursor(&mut self, arrow:keyboard::Arrow) -> Option<()> {
-        use keyboard::Arrow::*;
+    fn cmd_move_cursor(&mut self, arrow:kb::Arrow) -> Option<()> {
+        use kb::Arrow::*;
         match arrow {
             Up => {
                 self.doc_position.rows -= 1;
@@ -338,7 +341,7 @@ impl Buffer<'_> {
         self.visual_buffer.push_str(&format!("\x1b[{};{}H", pivot_anchor.rows, pivot_anchor.cols));
         
         for line in (0..=self.buffer_size.rows).rev() {
-            let real_line = i64::try_from(self.doc_offset.rows).unwrap()-i64::try_from(line).unwrap()/*-i64::try_from(self.doc_position.rows).unwrap()*/;
+            let real_line = i64::try_from(self.doc_offset.rows).unwrap()-i64::try_from(line).unwrap();//-i64::try_from(self.doc_position.rows).unwrap();
             
             match real_line {
                 current_line if current_line < 0 => {
@@ -361,7 +364,7 @@ impl Buffer<'_> {
                     }
                     
                 }
-                current_line => {
+                _current_line => {
                     self.visual_buffer.push_str("\x1b[44m");
                     self.get_column_decoration(&mut deco, real_line, true);
                     self.visual_buffer.push_str(&deco);
@@ -370,24 +373,6 @@ impl Buffer<'_> {
                     }
                 }
             }
-            
-            /*
-            let data = real_line.to_string();
-            self.visual_buffer.push_str(&data);
-            for _iter in 0..10-data.len() {
-                self.visual_buffer.push_str(" ");
-            }
-            let data = self.doc_position.rows.to_string();
-            self.visual_buffer.push_str(&data);
-            for _iter in 0..10-data.len() {
-                self.visual_buffer.push_str(" ");
-            }
-            let data = self.doc_offset.rows.to_string();
-            self.visual_buffer.push_str(&data);
-            for _iter in 0..10-data.len() {
-                self.visual_buffer.push_str(" ");
-            }
-            */
             
             self.visual_buffer.push_str(&next_line);
             
@@ -475,12 +460,6 @@ impl Buffer<'_> {
     
     
 
-    pub fn get_buffer_name(&self) -> &String {
-        &self.name
-    }
-    
-    
-    
     fn update_margin_left(&mut self) {
         use Numeration::*;
         let string = self.lines.len().to_string();
@@ -496,40 +475,31 @@ impl Buffer<'_> {
     }
     
     
-    /*
-    pub mode_color: &'a str,
-    pub mode_text: &'a str,
-    pub file_color: &'a str,
-    pub file_text: &'a str,
-    pub middle_color: &'a str,
-    */
 
-    fn update_status_bar(&mut self) {
+    fn set_status_bar(&mut self) {
+        let holder = StatusBarData{
+            mode_color: ArrayString::from("\x1b[1;38;5;22;48;5;148m").unwrap(),
+            mode_text: ArrayString::from(" NORMAL ").unwrap(),
+            file_color: ArrayString::from("\x1b[0;39;48;5;244m").unwrap(),
+            middle_color: ArrayString::from("\x1b[0;39;48;5;238m").unwrap(),
+        };
+        self.status_bar_data.insert(usize::from(EditorMode::Normal), holder);
         
-        self.status_bar.clear();
-        match self.mode {
-            EditorMode::Normal => {
-                self.status_bar_data.mode_color = "\x1b[1;38;5;22;48;5;148m";
-                self.status_bar_data.mode_text = " NORMAL ";
-                self.status_bar_data.file_color = "\x1b[0;39;48;5;244m";
-                self.status_bar_data.file_text = "test file name";
-                self.status_bar_data.middle_color = "\x1b[0;39;48;5;238m";
-            },
-            EditorMode::Insert => {
-                self.status_bar_data.mode_color = "\x1b[1;38;5;196;48;5;208m";
-                self.status_bar_data.mode_text = " INSERT ";
-                self.status_bar_data.file_color = "\x1b[0;39;48;5;185m";
-                self.status_bar_data.file_text = "test insert name";
-                self.status_bar_data.middle_color = "\x1b[0;39;48;5;238m";
-            }
-        }
+        let holder = StatusBarData{
+            mode_color: ArrayString::from("\x1b[1;38;5;196;48;5;208m").unwrap(),
+            mode_text: ArrayString::from(" INSERT ").unwrap(),
+            file_color: ArrayString::from("\x1b[0;39;48;5;185m").unwrap(),
+            middle_color: ArrayString::from("\x1b[0;39;48;5;238m").unwrap(),
+        };
+        self.status_bar_data.insert(usize::from(EditorMode::Insert), holder);
         
+        //panic!("{:#?}", self.status_bar_data);
     }
 
 
 
-    pub fn get_status_bar(&self) -> &StatusBarData {
-        &self.status_bar_data
+    pub fn get_status_bar_data(&self) -> (&StatusBarData, Option<&str>) {
+        (&self.status_bar_data[usize::from(self.mode)], self.name.as_ref().map(|x| x.as_str()))
     }
     
 
