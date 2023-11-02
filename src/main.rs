@@ -19,7 +19,6 @@ use state::State;
 mod win_state;
 use win_state::WindowState;
 
-mod buffer;
 mod buffers;
 
 use g_libc::{

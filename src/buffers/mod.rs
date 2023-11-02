@@ -22,6 +22,7 @@ pub enum Buffers {
 impl Buffers {
     pub fn new_text(offset:TPos<u16>, term_size:TPos<u16>, opening_file:Option<&str>) -> Self {
         Buffers::Text(text_buffer::Buffer::new(offset, term_size, opening_file))
+        
     }
 }
 
@@ -41,7 +42,7 @@ impl ProcessKey for Buffers {
 
 
 impl GetCursorLocation for Buffers {
-    fn get_cursor_location(&self) -> TPos<u16> {
+    fn get_cursor_location(&self) -> (TPos<u16>, char) {
         match self {
             Buffers::Text(buffer) => {
                 buffer.get_cursor_location()

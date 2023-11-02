@@ -65,9 +65,32 @@ impl FileMeta {
         }
     }
 
+    pub fn insert_line(&mut self, location:usize, holder:String) -> Result<(),()> {
+        self.lines.insert(location, holder);
+        Ok(())
+    }
     
-    pub fn insert(&mut self, location:TPos<usize>, caracter:char) -> Result<(),()> {
+    pub fn insert_char(&mut self, location:TPos<usize>, caracter:char) -> Result<(),()> {
         self.lines[location.rows].insert(location.cols, caracter);
+        Ok(())
+    }
+    
+    pub fn delete_line(&mut self, location:usize) -> Result<(), ()> {
+        self.lines.remove(location);
+        Ok(())
+    }
+    
+    pub fn delete_char(&mut self, location:TPos<usize>) -> Result<(),()> {
+        self.lines[location.rows].remove(location.cols);
+        Ok(())
+    }
+    
+    #[inline(always)]
+    pub fn fuse_lines(&mut self, location:usize) -> Result<(), ()> {
+        //self.lines[location].pop();
+        let holder = self.lines.remove(location+1);
+        
+        self.lines[location].push_str(&holder);
         Ok(())
     }
     
@@ -88,10 +111,19 @@ impl FileMeta {
             None => {
                 todo!("logic when file does not exists");
             }
+            
         }
+        
     }
     
+    
+    pub fn get_line_len(&self, index:usize) -> usize {
+        self.lines[index].len()
+    }
+    
+    
 }
+
 
 impl Index<usize> for FileMeta {
     type Output = String;

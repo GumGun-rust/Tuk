@@ -14,7 +14,7 @@ pub trait ProcessKey {
 }
 
 pub trait GetCursorLocation {
-    fn get_cursor_location(&self) -> TPos<u16>;
+    fn get_cursor_location(&self) -> (TPos<u16>, char);
 }
     
 pub trait GetVisualBuffer {

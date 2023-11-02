@@ -1,13 +1,19 @@
 use nix::unistd;
 
 use super::{
+    
     h_s::{
         TPos,
     },
     g_libc,
     kb,
-    buffer,
-    buffers,
+    buffers::{
+        self,
+        GetCursorLocation,
+        ProcessKey,
+        GetVisualBuffer,
+        GetSbData,
+    },
 };
 
 use std::{
@@ -21,7 +27,7 @@ pub struct WindowState {
     pub terminal_size: TPos<u16>,
     pub append_buffer: String,
     pub current_buff: usize,
-    pub main_buffers: Vec<buffer::Buffer>,
+    //pub main_buffers: Vec<buffer::Buffer>,
     pub main_buffers_v2: Vec<buffers::Buffers>,
     pub status_bar: bool,
 }
@@ -30,10 +36,8 @@ impl WindowState {
     
     
     pub fn new(term_fd: Rc<i32>) -> Self {
-        let buffer_vec_holder:Vec<buffer::Buffer> = Vec::new();
         let holder = Self{
             term_fd: term_fd, 
-            main_buffers: buffer_vec_holder,
             .. WindowState::default() 
         };
         holder
@@ -52,19 +56,12 @@ impl WindowState {
             cols: 0,
         };
         
-        let buffer_holder = buffer::Buffer::new(
-            offset,
-            buffer_size-1,
-            opening_file,
-        );
-        
         let buffer_holder_v2 = buffers::Buffers::new_text(
             offset,
             buffer_size-1,
             opening_file,
         );
         
-        self.main_buffers.push(buffer_holder);
         self.main_buffers_v2.push(buffer_holder_v2);
         
         let _ = unistd::write(*self.term_fd, b"\x1b[2J");
@@ -78,7 +75,7 @@ impl WindowState {
     pub fn process_key(&mut self) -> Option<()>{
         match self.read_key() {
             Some(read_key) => {
-                self.main_buffers[self.current_buff].process_key(read_key);
+                self.main_buffers_v2[self.current_buff].process_key(read_key);
             },
             None => {}
         }
@@ -89,7 +86,13 @@ impl WindowState {
 
     
 
-    pub fn read_key(&self) -> Option<kb::KeyCode>/*Option<i64>*/ {
+    pub fn read_key(&self) -> Option<kb::KeyCode> {
+        
+        const BACKSPACE:u8 = b'';
+        const TAB:u8 = b'\t';
+        const ENTER:u8 = 13;
+        const SPACE:u8 = 32;
+        
         let mut buffer = [0u8];
         match unistd::read(*self.term_fd, &mut buffer[..]) {
             Ok(value) => {
@@ -97,11 +100,23 @@ impl WindowState {
                     return None
                 } 
                 match buffer[0] {
-                    b'q' => {
-                        panic!("q to abort");
-                    }
+                    b'q' => {panic!("q to abort");}
+                    
                     b'\x1b' => Some(self.handle_esc_code().into()),
-                    letter @ _ =>  Some(kb::KeyCode::Letter(letter)),
+                    
+                    letter @ b'a'..=b'z' => Some(kb::KeyCode::Letter(letter)),
+                    
+                    BACKSPACE => Some(kb::KeyCode::SpecialKey(kb::SpecialKey::BackSpace)),
+                    
+                    TAB => Some(kb::KeyCode::SpecialKey(kb::SpecialKey::Tab)),
+                    
+                    ENTER => Some(kb::KeyCode::SpecialKey(kb::SpecialKey::Enter)),
+                    
+                    SPACE => Some(kb::KeyCode::SpecialKey(kb::SpecialKey::Space)),
+                    
+                    letter @ 1..=26 => Some(kb::KeyCode::CtrlKey(letter+b'a'-1)),
+                    
+                    letter => {todo!("other key {}", letter);}
                 }
             },
             Err(err) => {
@@ -117,25 +132,40 @@ impl WindowState {
         let mut buffer = [0u8;3];
         match unistd::read(*self.term_fd, &mut buffer[..]) {
             Ok(value) => {
-                if value == 0 {
-                    return kb::EscapeCode::Esc;
-                }
-                if buffer[0] != b'[' {
-                    return kb::EscapeCode::Esc;
-                }
-                match buffer[1] {
-                    65 => kb::EscapeCode::ArrowUp,
-                    66 => kb::EscapeCode::ArrowDown,
-                    67 => kb::EscapeCode::ArrowRight,
-                    68 => kb::EscapeCode::ArrowLeft,
-                    number @ _ => {
-                        todo!(" escape code not supported yet buffer Code {}", number);
+                match value{
+                    0 => {
+                        return kb::EscapeCode::Esc;
+                    }
+                    1 => {
+                        match buffer[0] {
+                            letter @ b'a'..=b'z' => kb::EscapeCode::AltKey(letter), 
+                            letter @ 1..=26 => kb::EscapeCode::AltCtrlKey(letter+b'a'-1),
+                            letter => {
+                                todo!("unsuported letter {}", letter);
+                            }
+                        }
+                    }
+                    2 => {
+                        if buffer[0] != b'[' {
+                            return kb::EscapeCode::Esc;
+                        }
+                        match buffer[1] {
+                            65 => kb::EscapeCode::ArrowUp,
+                            66 => kb::EscapeCode::ArrowDown,
+                            67 => kb::EscapeCode::ArrowRight,
+                            68 => kb::EscapeCode::ArrowLeft,
+                            number @ _ => {
+                                todo!(" escape code not supported yet buffer Code {}", number);
+                            }
+                        }
+                    }
+                    value => {
+                        todo!("implementing {} {:?}", value, buffer);
                     }
                 }
             },
             Err(err) => {
                 panic!("esc code {}", err);
-                //println!("{:?}", err);
             }
         }
         
@@ -166,16 +196,16 @@ impl WindowState {
         
         self.append_buffer.clear();
         
-        let updated_buffer = self.main_buffers[self.current_buff].update_visual_buffer();
+        let updated_buffer = self.main_buffers_v2[self.current_buff].get_visual_buffer();
         
         self.append_buffer.push_str(updated_buffer);
         
-        let cursor_location = self.main_buffers[self.current_buff].get_cursor_location();
+        let (cursor_location, cursor_type) = self.main_buffers_v2[self.current_buff].get_cursor_location();
         //let file_name = self.main_buffers[self.current_buff].get_buffer_name().clone();
         
         self.status_bar();
         
-        self.append_buffer.push_str(&format!("\x1b[{};{}H", cursor_location.rows, cursor_location.cols));
+        self.append_buffer.push_str(&format!("\x1b[{} q\x1b[{};{}H", cursor_type, cursor_location.rows, cursor_location.cols));
         let _ = unistd::write(*self.term_fd, &self.append_buffer.as_bytes());
         
         return;
@@ -186,7 +216,7 @@ impl WindowState {
     fn status_bar(&mut self) {
         self.append_buffer.push_str(&format!("\x1b[{:?};0H", self.terminal_size.rows-1));
         
-        let (status_line_data, file_name) = self.main_buffers[self.current_buff].get_status_bar_data();
+        let (status_line_data, file_name) = self.main_buffers_v2[self.current_buff].get_sb_data();
         let file_name = match file_name {
             Some(file) => file,
             None => ""

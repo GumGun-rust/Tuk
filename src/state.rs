@@ -11,6 +11,8 @@ use std::{
     path::PathBuf,
 };
 
+const EXIT_CURSOR:&[u8] = b"\x1b[2 q";
+
 #[derive(Debug)]
 pub struct State {
     pub term_fd: Rc<i32>,
@@ -23,6 +25,7 @@ pub struct State {
 impl Drop for State {
     fn drop(&mut self) {
         self.disable_raw_mode();
+        let _ = unistd::write(*self.term_fd, EXIT_CURSOR);
         if self.regular_exit {
             self.window_state.clear_screen();
             let _ = unistd::write(*self.term_fd, &"\x1b[2J".as_bytes());

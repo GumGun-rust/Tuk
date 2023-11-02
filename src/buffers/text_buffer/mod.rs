@@ -75,6 +75,7 @@ pub struct Buffer {
     
     //visual position of the cursor relative to the offset
     pub doc_cursor_visual: TPos<u16>,
+    pub cursor_type: char,
     
     pub margin_left:u8,
     
@@ -109,8 +110,8 @@ impl GetSbData for Buffer {
 }
 
 impl GetCursorLocation for Buffer {
-    fn get_cursor_location(&self) -> TPos<u16> {
-        self.doc_cursor_visual + self.offset + 1
+    fn get_cursor_location(&self) -> (TPos<u16>, char) {
+        (self.doc_cursor_visual + self.offset + 1, self.cursor_type)
     }
     
 }
@@ -160,11 +161,13 @@ impl Buffer {
             doc_offset: doc_offset,
             lines: lines_holder,
             //doc_cursor_visual: doc_cursor_visual,
+            cursor_type: '2',
             
             ..Self::default()
         };
         holder.update_margin_left();
         holder.update_cursor_location();
+        holder.update_visual_buffer();
         holder.set_status_bar();
         holder
     }
@@ -176,30 +179,64 @@ impl Buffer {
                 match letter {
                     b'j' => {
                         self.cmd_move_cursor(kb::Arrow::Down);
-                        //panic!("r");
+                        self.update_visual_buffer();
                     }
                     b'k' => {
                         self.cmd_move_cursor(kb::Arrow::Up);
-                        //panic!("k");
+                        self.update_visual_buffer();
                     }
                     b'l' => {
                         self.cmd_move_cursor(kb::Arrow::Right);
+                        self.update_visual_buffer();
+                        
                     } b'h' => {
                         self.cmd_move_cursor(kb::Arrow::Left);
-                    }
-                    b'w' => {
-                        self.write_file();
+                        self.update_visual_buffer();
                     }
                     b'i' => {
                         self.mode = EditorMode::Insert;
+                        self.cursor_type = '6';
                     }
-                    _ => {
+                    b'a' => {
+                        self.mode = EditorMode::Insert;
+                        self.cursor_type = '6';
+                        if self.lines[self.doc_position.rows].len() > self.doc_position.cols {
+                            self.doc_position.cols += 1;
+                            self.doc_cursor_visual.cols += 1;
+                        } 
+                    }
+                    b'x' => {
+                        self.lines.delete_char(self.doc_position).unwrap();
+                        self.update_visual_buffer();
+                    }
+                    letter => {
+                        panic!("{} not supported yet", letter);
                         
                     }
                 }
             }
+            kb::KeyCode::CtrlKey(key) => {
+                panic!("ctrl key {}", key as char);
+            }
+            kb::KeyCode::AltKey(code) => {
+                match code {
+                    b'w' => {
+                        self.write_file();
+                    }
+                    _ => {
+                        panic!("alt key {}", code);
+                    }
+                }
+            }
+            kb::KeyCode::AltCtrlKey(code) => {
+                panic!("alt ctrl key {}", code);
+            }
+            kb::KeyCode::SpecialKey(key) => {
+                panic!("special key {:?}", key);
+            }
             kb::KeyCode::Arrow(arrow) => {
                 self.cmd_move_doc(arrow);
+                self.update_visual_buffer();
             }
         }
     }
@@ -210,19 +247,72 @@ impl Buffer {
         match key {
             kb::KeyCode::Letter(letter) => {
                 match letter {
-                    b'i' => {
-                        self.mode = EditorMode::Normal;
-                    }
                     letter => {
-                    //b'a' => {
-                        //let location = TPos::new(self.doc_position.rows, self.doc_position.cols);
-                        self.lines.insert(self.doc_position, char::from(letter)).unwrap();
-                        self.doc_position.cols += 1; 
-                        self.doc_cursor_visual.cols += 1; 
+                        self.insert_char_logic(char::from(letter));
+                    }
+                }
+            }
+            kb::KeyCode::CtrlKey(key) => {
+                panic!("ctrl key {}", key);
+            }
+            kb::KeyCode::AltKey(code) => {
+                match code {
+                    b'a' => {
+                        self.mode = EditorMode::Normal;
+                        self.cursor_type = '2';
+                    }
+                    _ => {
+                        panic!("alt key {}", code);
+                    }
+                }
+            }
+            kb::KeyCode::AltCtrlKey(code) => {
+                match code {
+                    _ => {
+                        panic!("alt ctrl key {}", code);
+                    }
+                }
+            }
+            kb::KeyCode::SpecialKey(key) => {
+                use kb::SpecialKey::*;
+                match key {
+                    BackSpace => {
+                        if self.doc_position.cols > 0 {
+                            self.doc_position.cols -= 1; 
+                            self.lines.delete_char(self.doc_position).unwrap();
+                            self.doc_cursor_visual.cols -= 1; 
+                        } else {
+                            if self.doc_position.rows > 0 {
+                                self.doc_position.rows -= 1; 
+                                self.doc_cursor_visual.rows -= 1;
+                                self.doc_position.cols = self.lines.get_line_len(self.doc_position.rows); 
+                                
+                                self.doc_cursor_visual.cols = u16::from(self.margin_left)+u16::try_from(self.lines.get_line_len(self.doc_position.rows)).expect("long line not supported"); 
+                                
+                                self.lines.fuse_lines(self.doc_position.rows).unwrap();
+                            }
+                        }
                         self.update_visual_buffer();
-                        
-                        //self.lines[self.doc_position.rows].insert(self.doc_position.cols, 'a');
-                        //panic!("a key");
+                    }
+                    Enter => {
+                        let holder = self.lines[self.doc_position.rows][self.doc_position.cols..].to_string();
+                        self.lines[self.doc_position.rows].replace_range(self.doc_position.cols.., "");
+                        self.lines.insert_line(self.doc_position.rows+1, holder).unwrap();
+                        self.doc_position.rows += 1; 
+                        self.doc_position.cols = 0; 
+                        self.doc_cursor_visual.cols = u16::from(self.margin_left); 
+                        self.doc_cursor_visual.rows += 1;
+                        self.update_visual_buffer();
+                    }
+                    Space => {
+                        self.insert_char_logic(' ');
+                    }
+                    Escape => {
+                        self.mode = EditorMode::Normal;
+                        self.cursor_type = '2';
+                    }
+                    Tab => {
+                        todo!("tab");
                     }
                 }
             }
@@ -233,6 +323,15 @@ impl Buffer {
         }
     }
     
+    
+    #[inline(always)]
+    fn insert_char_logic(&mut self, letter:char) {
+        self.lines.insert_char(self.doc_position, letter).unwrap(); 
+        self.doc_position.cols += 1; 
+        self.doc_cursor_visual.cols += 1; 
+        self.update_visual_buffer();
+        
+    }
     
     
     fn cmd_move_doc(&mut self, arrow:kb::Arrow) -> Option<()> {
@@ -338,7 +437,7 @@ impl Buffer {
             match real_line {
                 current_line if current_line < 0 => {
                     self.visual_buffer.push_str("\x1b[42m");
-                    self.get_column_decoration(&mut deco, real_line, true);
+                    self.get_column_decoration(&mut deco, real_line, false);
                     self.visual_buffer.push_str(&deco);
                     for _ in 0..self.buffer_size.cols-u16::from(self.margin_left)+1 {
                         self.visual_buffer.push(' ');
@@ -358,7 +457,7 @@ impl Buffer {
                 }
                 _current_line => {
                     self.visual_buffer.push_str("\x1b[44m");
-                    self.get_column_decoration(&mut deco, real_line, true);
+                    self.get_column_decoration(&mut deco, real_line, false);
                     self.visual_buffer.push_str(&deco);
                     for _ in 0..self.buffer_size.cols-u16::from(self.margin_left)+1 {
                         self.visual_buffer.push(' ');
