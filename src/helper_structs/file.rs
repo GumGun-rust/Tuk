@@ -67,11 +67,13 @@ impl FileMeta {
 
     pub fn insert_line(&mut self, location:usize, holder:String) -> Result<(),()> {
         self.lines.insert(location, holder);
+        self.char_count += 1;
         Ok(())
     }
     
     pub fn insert_char(&mut self, location:TPos<usize>, caracter:char) -> Result<(),()> {
         self.lines[location.rows].insert(location.cols, caracter);
+        self.char_count += 1;
         Ok(())
     }
     
@@ -82,6 +84,7 @@ impl FileMeta {
     
     pub fn delete_char(&mut self, location:TPos<usize>) -> Result<(),()> {
         self.lines[location.rows].remove(location.cols);
+        self.char_count -= 1;
         Ok(())
     }
     

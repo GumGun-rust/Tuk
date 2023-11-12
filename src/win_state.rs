@@ -47,13 +47,13 @@ impl WindowState {
 
     pub fn start_editor(&mut self, opening_file:Option<&str>) {
         let buffer_size = TPos::<u16>{
-            rows: self.terminal_size.rows-2,
-            cols: self.terminal_size.cols,//-30,
+            rows: self.terminal_size.rows-20,
+            cols: self.terminal_size.cols-30,
             //..self.terminal_size
         };
         let offset = TPos::<u16>{
-            rows: 0,
-            cols: 0,
+            rows: 10,
+            cols: 10,
         };
         
         let buffer_holder_v2 = buffers::Buffers::new_text(
@@ -102,9 +102,13 @@ impl WindowState {
                 match buffer[0] {
                     b'q' => {panic!("q to abort");}
                     
+                    b'Q' => Some(kb::KeyCode::SpecialKey(kb::SpecialKey::Debug)),
+                    
                     b'\x1b' => Some(self.handle_esc_code().into()),
                     
                     letter @ b'a'..=b'z' => Some(kb::KeyCode::Letter(letter)),
+                    
+                    letter @ b'A'..=b'Z' => Some(kb::KeyCode::Letter(letter)),
                     
                     BACKSPACE => Some(kb::KeyCode::SpecialKey(kb::SpecialKey::BackSpace)),
                     
@@ -207,6 +211,7 @@ impl WindowState {
         
         self.append_buffer.push_str(&format!("\x1b[{} q\x1b[{};{}H", cursor_type, cursor_location.rows, cursor_location.cols));
         let _ = unistd::write(*self.term_fd, &self.append_buffer.as_bytes());
+        //panic!("{}", self.append_buffer);
         
         return;
     }

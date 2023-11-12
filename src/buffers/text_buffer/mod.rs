@@ -1,3 +1,8 @@
+mod buffer_logic;
+mod graphics;
+mod keys;
+mod movements;
+
 use super::{
     super::{
         kb,
@@ -26,6 +31,12 @@ pub enum EditorMode {
     Normal,
     Insert,
 }
+
+enum CursorSelector {
+    Main,
+    Secondary,
+}
+
 
 impl From<EditorMode> for usize {
     fn from(mode:EditorMode) -> usize {
@@ -65,16 +76,6 @@ pub struct Buffer {
     pub name: Option<String>,
     pub file_path: Option<PathBuf>,
     
-    pub offset: TPos<u16>,
-    pub buffer_size: TPos<u16>,
-    
-    pub doc_offset: TPos<usize>,
-    
-    //position in cursor
-    pub doc_position: TPos<usize>,
-    
-    //visual position of the cursor relative to the offset
-    pub doc_cursor_visual: TPos<u16>,
     pub cursor_type: char,
     
     pub margin_left:u8,
@@ -87,10 +88,16 @@ pub struct Buffer {
     
     config: Config,
     
+    test_cursor: movements::Cursor,
 }
 
 impl ProcessKey for Buffer {
     fn process_key(&mut self, key:kb::KeyCode) {
+        
+        if let kb::KeyCode::SpecialKey(kb::SpecialKey::Debug) = key {
+            dbg!(&self.test_cursor);
+            panic!();
+        }
         
         match self.mode {
             EditorMode::Normal => {
@@ -111,7 +118,7 @@ impl GetSbData for Buffer {
 
 impl GetCursorLocation for Buffer {
     fn get_cursor_location(&self) -> (TPos<u16>, char) {
-        (self.doc_cursor_visual + self.offset + 1, self.cursor_type)
+        (self.test_cursor.doc_cursor_visual + self.test_cursor.offset+1, self.cursor_type)
     }
     
 }
@@ -129,8 +136,11 @@ impl Buffer {
         
         let doc_offset = TPos::<usize>{
             rows: usize::from(term_size.rows)/2,
-            cols: usize::from(term_size.cols)
+            cols: 0//usize::from(term_size.cols)
         };
+        
+        let doc_cursor_visual_cols = u16::try_from(term_size.rows).unwrap() - (u16::try_from(doc_offset.rows).unwrap() - 0);// u16::try_from(holder.test_cursor.doc_position.rows).unwrap());
+        
         
         let lines_holder;
         let file_path;
@@ -155,18 +165,26 @@ impl Buffer {
             
             name: name,
             file_path: file_path,
-            offset: offset,
             
-            buffer_size: term_size,
-            doc_offset: doc_offset,
             lines: lines_holder,
             //doc_cursor_visual: doc_cursor_visual,
             cursor_type: '2',
             
+            test_cursor: movements::Cursor::new(offset, term_size, doc_offset),
             ..Self::default()
         };
         holder.update_margin_left();
         holder.update_cursor_location();
+        //
+        holder.test_cursor.sec_doc_cursor_visual = /* TOCHANGE */ 10;
+        //
+        
+        holder.test_cursor.doc_cursor_visual = TPos::<u16>{
+            cols: u16::from(holder.margin_left),//u16::try_from(holder.test_cursor.doc_position.cols).unwrap(),
+            rows: doc_cursor_visual_cols,
+        };
+        holder.test_cursor.sec_doc_cursor_visual = holder.test_cursor.doc_cursor_visual.cols;
+        
         holder.update_visual_buffer();
         holder.set_status_bar();
         holder
@@ -178,35 +196,40 @@ impl Buffer {
             kb::KeyCode::Letter(letter) => {
                 match letter {
                     b'j' => {
-                        self.cmd_move_cursor(kb::Arrow::Down);
+                        
+                        self.move_cursor_down_visual();
                         self.update_visual_buffer();
                     }
                     b'k' => {
-                        self.cmd_move_cursor(kb::Arrow::Up);
+                        self.move_cursor_up_visual();
                         self.update_visual_buffer();
                     }
                     b'l' => {
-                        self.cmd_move_cursor(kb::Arrow::Right);
+                        //self.move_cursor(kb::Arrow::Right);
+                        panic!("key 'l'");
                         self.update_visual_buffer();
                         
                     } b'h' => {
-                        self.cmd_move_cursor(kb::Arrow::Left);
+                        //self.move_cursor(kb::Arrow::Left);
+                        panic!("key 'h'");
                         self.update_visual_buffer();
                     }
                     b'i' => {
-                        self.mode = EditorMode::Insert;
-                        self.cursor_type = '6';
+                        self.enter_insert_mode();
                     }
                     b'a' => {
-                        self.mode = EditorMode::Insert;
-                        self.cursor_type = '6';
-                        if self.lines[self.doc_position.rows].len() > self.doc_position.cols {
-                            self.doc_position.cols += 1;
-                            self.doc_cursor_visual.cols += 1;
-                        } 
+                        self.enter_insert_mode_after();
                     }
                     b'x' => {
-                        self.lines.delete_char(self.doc_position).unwrap();
+                        self.delete_char();
+                        self.update_visual_buffer();
+                    }
+                    b'o' => {
+                        self.insert_empty_line_bellow();
+                        self.update_visual_buffer();
+                    }
+                    b'O' => {
+                        self.insert_empty_line_above();
                         self.update_visual_buffer();
                     }
                     letter => {
@@ -235,7 +258,7 @@ impl Buffer {
                 panic!("special key {:?}", key);
             }
             kb::KeyCode::Arrow(arrow) => {
-                self.cmd_move_doc(arrow);
+                self.move_doc(arrow);
                 self.update_visual_buffer();
             }
         }
@@ -248,7 +271,7 @@ impl Buffer {
             kb::KeyCode::Letter(letter) => {
                 match letter {
                     letter => {
-                        self.insert_char_logic(char::from(letter));
+                        self.insert_char(char::from(letter));
                     }
                 }
             }
@@ -277,35 +300,15 @@ impl Buffer {
                 use kb::SpecialKey::*;
                 match key {
                     BackSpace => {
-                        if self.doc_position.cols > 0 {
-                            self.doc_position.cols -= 1; 
-                            self.lines.delete_char(self.doc_position).unwrap();
-                            self.doc_cursor_visual.cols -= 1; 
-                        } else {
-                            if self.doc_position.rows > 0 {
-                                self.doc_position.rows -= 1; 
-                                self.doc_cursor_visual.rows -= 1;
-                                self.doc_position.cols = self.lines.get_line_len(self.doc_position.rows); 
-                                
-                                self.doc_cursor_visual.cols = u16::from(self.margin_left)+u16::try_from(self.lines.get_line_len(self.doc_position.rows)).expect("long line not supported"); 
-                                
-                                self.lines.fuse_lines(self.doc_position.rows).unwrap();
-                            }
-                        }
+                        self.backspace();
                         self.update_visual_buffer();
                     }
                     Enter => {
-                        let holder = self.lines[self.doc_position.rows][self.doc_position.cols..].to_string();
-                        self.lines[self.doc_position.rows].replace_range(self.doc_position.cols.., "");
-                        self.lines.insert_line(self.doc_position.rows+1, holder).unwrap();
-                        self.doc_position.rows += 1; 
-                        self.doc_position.cols = 0; 
-                        self.doc_cursor_visual.cols = u16::from(self.margin_left); 
-                        self.doc_cursor_visual.rows += 1;
+                        self.enter();
                         self.update_visual_buffer();
                     }
                     Space => {
-                        self.insert_char_logic(' ');
+                        self.insert_char(' ');
                     }
                     Escape => {
                         self.mode = EditorMode::Normal;
@@ -314,6 +317,9 @@ impl Buffer {
                     Tab => {
                         todo!("tab");
                     }
+                    Debug => {
+                        todo!("should not arrive here ever");
+                    }
                 }
             }
             kb::KeyCode::Arrow(arrow) => {
@@ -321,154 +327,6 @@ impl Buffer {
                 //self.cmd_move_doc(arrow);
             }
         }
-    }
-    
-    
-    #[inline(always)]
-    fn insert_char_logic(&mut self, letter:char) {
-        self.lines.insert_char(self.doc_position, letter).unwrap(); 
-        self.doc_position.cols += 1; 
-        self.doc_cursor_visual.cols += 1; 
-        self.update_visual_buffer();
-        
-    }
-    
-    
-    fn cmd_move_doc(&mut self, arrow:kb::Arrow) -> Option<()> {
-        match arrow {
-            kb::Arrow::Up => {
-                self.doc_offset.rows += 1;
-                self.doc_position.rows += 1;
-                /*
-                let number = i64::try_from(self.doc_offset.rows).unwrap()-i64::try_from(self.lines.len()).unwrap();
-                if number+1 < self.buffer_size.rows.into() {
-                    self.doc_offset.rows += 1;
-                    //self.doc_cursor_visual.rows -= 1;
-                }
-                */
-            }
-            kb::Arrow::Down => {
-                self.doc_offset.rows -= 1;
-                self.doc_position.rows -= 1;
-                /*
-                */
-                
-            }
-            /*
-            kb::Arrow::Left => {
-            }
-            kb::Arrow::Right => {
-            }
-            */
-            _ => {
-                todo!("no side arrows");
-            }
-        }
-        self.update_cursor_location();
-        None
-    }
-    
-    
-    
-    fn cmd_move_cursor(&mut self, arrow:kb::Arrow) -> Option<()> {
-        use kb::Arrow::*;
-        match arrow {
-            Up => {
-                self.doc_position.rows -= 1;
-                /*
-                panic!("{} {} {} {}", self.buffer_size.rows, self.doc_offset.rows, self.doc_position.rows, self.doc_offset.rows-self.doc_position.rows);
-                if usize::from(self.buffer_size.rows) > self.doc_offset.rows-self.doc_position.rows {
-                    
-                }
-                self.doc_position.rows -= 1;
-                self.doc_offset.rows -= 1;
-                */
-                
-            }
-            Down => {
-                self.doc_position.rows += 1;
-                /*
-                self.doc_position.rows += 1;
-                self.doc_offset.rows += 1;
-                */
-            }
-            Left => {
-                if self.doc_position.cols != 0 {
-                    self.doc_position.cols -= 1;
-                }
-                //todo!("no side arrow left");
-            }
-            Right => {
-                if self.doc_position.cols <= self.lines[self.doc_position.rows].len()-1 {
-                    self.doc_position.cols += 1;
-                }
-                //todo!("no side arrows right");
-            }
-        }
-        self.update_cursor_location();
-        None
-    }
-    
-
-    
-    fn update_cursor_location(&mut self) {
-        self.doc_cursor_visual = TPos::<u16>{
-            cols: u16::from(self.margin_left)+u16::try_from(self.doc_position.cols).unwrap(),
-            rows: u16::try_from(self.buffer_size.rows).unwrap() - (u16::try_from(self.doc_offset.rows).unwrap() - u16::try_from(self.doc_position.rows).unwrap())
-        };
-    }
-    
-    
-    
-    fn update_visual_buffer(&mut self) {
-        let mut deco = String::new();
-        let pivot_anchor = self.offset+1;
-        let next_line = format!("\x1b[{}G\n", pivot_anchor.cols);
-        
-        self.visual_buffer.clear();
-        if self.visual_buffer.len() != 0 {
-            panic!("diff de zero");
-        }
-        self.visual_buffer.push_str(&format!("\x1b[{};{}H", pivot_anchor.rows, pivot_anchor.cols));
-        
-        for line in (0..=self.buffer_size.rows).rev() {
-            let real_line = i64::try_from(self.doc_offset.rows).unwrap()-i64::try_from(line).unwrap();//-i64::try_from(self.doc_position.rows).unwrap();
-            
-            match real_line {
-                current_line if current_line < 0 => {
-                    self.visual_buffer.push_str("\x1b[42m");
-                    self.get_column_decoration(&mut deco, real_line, false);
-                    self.visual_buffer.push_str(&deco);
-                    for _ in 0..self.buffer_size.cols-u16::from(self.margin_left)+1 {
-                        self.visual_buffer.push(' ');
-                    }
-                }
-                current_line if usize::try_from(current_line).unwrap() < self.lines.len() => {
-                    self.visual_buffer.push_str("\x1b[49m");
-                    self.get_column_decoration(&mut deco, real_line, true);
-                    self.visual_buffer.push_str(&deco);
-                    
-                    self.visual_buffer.push_str(&self.lines[usize::try_from(real_line).unwrap()]);
-                    
-                    for _ in 0..usize::from(self.buffer_size.cols)-usize::from(self.margin_left)+1-self.lines[usize::try_from(real_line).unwrap()].len() {
-                        self.visual_buffer.push(' ');
-                    }
-                    
-                }
-                _current_line => {
-                    self.visual_buffer.push_str("\x1b[44m");
-                    self.get_column_decoration(&mut deco, real_line, false);
-                    self.visual_buffer.push_str(&deco);
-                    for _ in 0..self.buffer_size.cols-u16::from(self.margin_left)+1 {
-                        self.visual_buffer.push(' ');
-                    }
-                }
-            }
-            
-            self.visual_buffer.push_str(&next_line);
-            
-        }
-        
     }
     
     
@@ -509,7 +367,7 @@ impl Buffer {
                 }
             }
             Relative => {
-                let line_offset = (i64::try_from(self.doc_position.rows).unwrap() - line).abs();
+                let line_offset = (i64::try_from(self.test_cursor.doc_position.rows).unwrap() - line).abs();
                 if inside_doc {
                     let string = line_offset.to_string();
                     for _ in 0..usize::from(self.margin_left)-string.len()-1 {
@@ -524,7 +382,7 @@ impl Buffer {
                 
             }
             Both => {
-                let line_offset = (i64::try_from(self.doc_position.rows).unwrap() - line).abs();
+                let line_offset = (i64::try_from(self.test_cursor.doc_position.rows).unwrap() - line).abs();
                 
                 if line_offset == 0 {
                     let string = line.to_string();
@@ -592,8 +450,5 @@ impl Buffer {
         self.lines.save();
     }
 
-    
-    
+   
 }
-
-

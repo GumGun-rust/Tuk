@@ -24,6 +24,7 @@ pub enum SpecialKey {
     Enter,
     Space,
     Escape,
+    Debug,
 }
 
 pub enum EscapeCode {

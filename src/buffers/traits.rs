@@ -25,3 +25,6 @@ pub trait GetSbData {
     fn get_sb_data(&self) -> (&StatusBarData, Option<&str>);
 }
 
+pub trait UpdateVisualBuffer {
+    fn update_visual_buffer(&mut self);
+}
