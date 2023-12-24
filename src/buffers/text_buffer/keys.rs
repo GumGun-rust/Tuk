@@ -19,7 +19,7 @@ impl Buffer {
         }
     }
     
-    pub(super) fn enter(&mut self) {
+    pub(super) fn enter_key(&mut self) {
         let holder = self.lines[self.test_cursor.doc_position.rows][self.test_cursor.doc_position.cols..].to_string();
         self.lines[self.test_cursor.doc_position.rows].replace_range(self.test_cursor.doc_position.cols.., "");
         self.lines.insert_line(self.test_cursor.doc_position.rows+1, holder).unwrap();

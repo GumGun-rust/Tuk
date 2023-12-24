@@ -1,6 +1,7 @@
 #[derive(Debug)]
 pub enum KeyCode {
     Letter(u8),
+    Number(u8),
     CtrlKey(u8),
     AltKey(u8),
     Arrow(Arrow),

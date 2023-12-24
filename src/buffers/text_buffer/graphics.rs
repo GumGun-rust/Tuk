@@ -1,10 +1,8 @@
-use super::{
-    Buffer,
-};
+use super::Buffer;
 
 use std::cmp::Ord;
+
 impl Buffer {
-    
     pub(super) fn update_visual_buffer(&mut self) {
         let mut deco = String::new();
         let pivot_anchor = self.test_cursor.offset+1;

@@ -65,6 +65,10 @@ pub struct Config {
     
 }
 
+#[derive(Default, Debug)]
+pub struct CommandModifiers {
+    pub amount:isize,
+}
 
 
 #[derive(Default, Debug)]
@@ -89,16 +93,17 @@ pub struct Buffer {
     config: Config,
     
     test_cursor: movements::Cursor,
+    
+    command: CommandModifiers,
 }
 
 impl ProcessKey for Buffer {
     fn process_key(&mut self, key:kb::KeyCode) {
         
         if let kb::KeyCode::SpecialKey(kb::SpecialKey::Debug) = key {
-            dbg!(&self.test_cursor);
-            panic!();
+            //dbg!(&self.test_cursor);
+            panic!("{:?}", self.command);
         }
-        
         match self.mode {
             EditorMode::Normal => {
                 self.process_key_visual(key);
@@ -176,7 +181,7 @@ impl Buffer {
         holder.update_margin_left();
         holder.update_cursor_location();
         //
-        holder.test_cursor.sec_doc_cursor_visual = /* TOCHANGE */ 10;
+        holder.test_cursor.sec_doc_cursor_visual = 0;// TOCHANGE ;
         //
         
         holder.test_cursor.doc_cursor_visual = TPos::<u16>{
@@ -205,12 +210,10 @@ impl Buffer {
                         self.update_visual_buffer();
                     }
                     b'l' => {
-                        //self.move_cursor(kb::Arrow::Right);
                         panic!("key 'l'");
                         self.update_visual_buffer();
                         
                     } b'h' => {
-                        //self.move_cursor(kb::Arrow::Left);
                         panic!("key 'h'");
                         self.update_visual_buffer();
                     }
@@ -237,6 +240,10 @@ impl Buffer {
                         
                     }
                 }
+            }
+            kb::KeyCode::Number(number) => {
+                self.command.amount *= 10isize;
+                self.command.amount += isize::from(number);
             }
             kb::KeyCode::CtrlKey(key) => {
                 panic!("ctrl key {}", key as char);
@@ -275,6 +282,9 @@ impl Buffer {
                     }
                 }
             }
+            kb::KeyCode::Number(number) => {
+                panic!("{}", number);
+            }
             kb::KeyCode::CtrlKey(key) => {
                 panic!("ctrl key {}", key);
             }
@@ -304,7 +314,7 @@ impl Buffer {
                         self.update_visual_buffer();
                     }
                     Enter => {
-                        self.enter();
+                        self.enter_key();
                         self.update_visual_buffer();
                     }
                     Space => {

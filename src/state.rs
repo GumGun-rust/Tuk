@@ -1,15 +1,9 @@
 use nix::unistd;
-use super::{
-    g_libc::{
-        self,
-        TcSetAttrAction,
-    },
-};
+use super::g_libc;
+use super::g_libc::TcSetAttrAction;
 
-use std::{
-    rc::Rc,
-    path::PathBuf,
-};
+use std::rc::Rc;
+use std::path::PathBuf;
 
 const EXIT_CURSOR:&[u8] = b"\x1b[2 q";
 

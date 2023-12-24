@@ -21,24 +21,29 @@ impl Buffer {
     
     pub(super) fn move_cursor_up_visual(&mut self) {
         use movements::up;
+        /*
         match up::visual::can_move(&mut self.test_cursor, self.lines.len(), 1) {
             up::MoveType::Push(amount) => {
                 up::action_push(&mut self.test_cursor, amount);
             }
             up::MoveType::MoveAndPush(amount) => {
-                up::action_move_and_push(&mut self.test_cursor, amount);
+                up::action_push(&mut self.test_cursor, amount);
+                up::action_move(&mut self.test_cursor, amount);
+                //up::action_move_and_push(&mut self.test_cursor, amount);
             }
             up::MoveType::Move(amount) => {
                 up::action_move(&mut self.test_cursor, amount);
             }
             up::MoveType::None => {}
         }
-        
+        */
+        panic!();
     }
     
     pub(super) fn move_cursor_down_visual(&mut self) {
+        /*
         use movements::down;
-        match down::can_move_visual(&mut self.test_cursor, self.lines.len(), 1) {
+        match down::visual::can_move(&mut self.test_cursor, self.lines.len(), 1) {
             down::MoveType::None => {}
             down::MoveType::Push(amount) => {
                 down::action_push(&mut self.test_cursor, amount);
@@ -50,6 +55,7 @@ impl Buffer {
                 down::action_move(&mut self.test_cursor, amount);
             }
         }
+        */
     }
 
     pub(super) fn move_doc(&mut self, arrow:kb::Arrow) -> Option<()> {
@@ -139,19 +145,3 @@ impl Buffer {
     
     
 }
-
-/*
-impl Buffer {
-    
-    #[inline(always)]
-    pub fn insert_char_logic(&mut self, letter:char) {
-        self.lines.insert_char(self.test_cursor.doc_position, letter).unwrap(); 
-        self.test_cursor.doc_position.cols += 1; 
-        self.test_cursor.doc_cursor_visual.cols += 1; 
-        self.update_visual_buffer();
-        
-    }
-    
-    
-}
-*/

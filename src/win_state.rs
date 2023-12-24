@@ -1,24 +1,15 @@
 use nix::unistd;
 
-use super::{
-    
-    h_s::{
-        TPos,
-    },
-    g_libc,
-    kb,
-    buffers::{
-        self,
-        GetCursorLocation,
-        ProcessKey,
-        GetVisualBuffer,
-        GetSbData,
-    },
-};
+use super::h_s::TPos;
+use super::g_libc;
+use super::kb;
+use super::buffers;
+use super::buffers::GetCursorLocation;
+use super::buffers::ProcessKey;
+use super::buffers::GetVisualBuffer;
+use super::buffers::GetSbData;
 
-use std::{
-    rc::Rc,
-};
+use std::rc::Rc;
 
 
 #[derive(Default, Debug)]
@@ -119,6 +110,8 @@ impl WindowState {
                     SPACE => Some(kb::KeyCode::SpecialKey(kb::SpecialKey::Space)),
                     
                     letter @ 1..=26 => Some(kb::KeyCode::CtrlKey(letter+b'a'-1)),
+                    
+                    number @ b'0'..=b'9' => Some(kb::KeyCode::Number(number-b'0')),
                     
                     letter => {todo!("other key {}", letter);}
                 }

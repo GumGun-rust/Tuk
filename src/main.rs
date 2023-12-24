@@ -2,10 +2,12 @@
 use nix::unistd;
 use errno;
 */
+
 use std::env;
 
 mod libc_safe;
 use libc_safe as g_libc;
+use g_libc::STDIN_FILENO;
 
 mod helper_structs;
 use helper_structs as h_s;
@@ -21,9 +23,6 @@ use win_state::WindowState;
 
 mod buffers;
 
-use g_libc::{
-    STDIN_FILENO,
-};
 
 fn main() {
     let mut state = State::new(STDIN_FILENO);

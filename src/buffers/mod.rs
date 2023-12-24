@@ -3,12 +3,8 @@ mod text_buffer;
 mod traits;
 pub use traits::*;
 
-use super::{
-    kb,
-    h_s::{
-        TPos,
-    },
-};
+use super::kb;
+use super::h_s::TPos;
 
 use arrayvec::ArrayString;
 
