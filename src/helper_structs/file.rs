@@ -19,9 +19,11 @@ use std::{
 };
 
 
+use debug_ignore::DebugIgnore;
+
 #[derive(Debug, Default)]
 pub struct FileMeta {
-    pub lines: Vec<String>,
+    pub lines: DebugIgnore<Vec<String>>,
     pub char_count: usize,
     pub file: Option<File>,
 }
@@ -30,7 +32,7 @@ pub struct FileMeta {
 impl FileMeta {
     pub fn new() -> Self {
         Self{
-            lines: vec!["".to_owned()],
+            lines: debug_ignore::DebugIgnore(vec!["".to_owned()]),
             char_count: 0,
             file: None,
         }
@@ -59,7 +61,7 @@ impl FileMeta {
         */
         
         Self{
-            lines: lines,
+            lines: debug_ignore::DebugIgnore(lines),
             char_count: len,
             file: Some(file),
         }

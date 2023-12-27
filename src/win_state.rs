@@ -222,11 +222,12 @@ impl WindowState {
         
         
         self.append_buffer.push_str(&format!("{}{}{} {} {}", 
-                status_line_data.mode_color, 
-                status_line_data.mode_text,
-                status_line_data.file_color, 
-                file_name,
-                status_line_data.middle_color));
+            status_line_data.mode_color, 
+            status_line_data.mode_text,
+            status_line_data.file_color, 
+            file_name,
+            status_line_data.middle_color
+        ));
         
         for _columns in 2..usize::try_from(self.terminal_size.cols).unwrap()-status_line_data.mode_text.len()-file_name.len() {
             self.append_buffer.push(' ');

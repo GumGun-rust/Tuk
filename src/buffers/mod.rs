@@ -1,5 +1,7 @@
 mod file_explorer_buffer;
-mod text_buffer;
+//mod text_buffer;
+mod text;
+use text::Buffer as TextBuffer;
 mod traits;
 pub use traits::*;
 
@@ -8,17 +10,19 @@ use super::h_s::TPos;
 
 use arrayvec::ArrayString;
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum Buffers {
-    Text(text_buffer::Buffer),
+    //Text2(text_buffer::Buffer),
+    Text(TextBuffer),
     FileExp(file_explorer_buffer::Buffer),
 }
 
 
 impl Buffers {
+    #[allow(unused_variables)]
     pub fn new_text(offset:TPos<u16>, term_size:TPos<u16>, opening_file:Option<&str>) -> Self {
-        Buffers::Text(text_buffer::Buffer::new(offset, term_size, opening_file))
-        
+        Buffers::Text(TextBuffer::new(offset, term_size, opening_file))
     }
 }
 
@@ -89,4 +93,5 @@ pub struct StatusBarData {
     pub file_color: ArrayString<32>,
     pub middle_color: ArrayString<32>,
 }
+
 

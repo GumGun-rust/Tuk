@@ -1,28 +1,3 @@
-[src/buffers/text_buffer/mod.rs:98] &self.test_cursor = Cursor {
-    offset: TPos {
-        rows: 10,
-        cols: 10,
-    },
-    buffer_size: TPos {
-        rows: 44,
-        cols: 208,
-    },
-    doc_offset: TPos {
-        rows: 6,
-        cols: 0,
-    },
-    doc_position: TPos {
-        rows: 5,
-        cols: 0,
-    },
-    doc_cursor_visual: TPos {
-        rows: 43,
-        cols: 4,
-    },
-    sec_doc_position: 0,
-    sec_doc_cursor_visual: 4,
-    scrollof: 2,
-    endline: false,
-}
-thread 'main' panicked at 'explicit panic', src/buffers/text_buffer/mod.rs:99:13
+thread 'main' panicked at src/win_state.rs:94:30:
+q to abort
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
