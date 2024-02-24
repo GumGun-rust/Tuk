@@ -1,50 +1,48 @@
 use super::Buffer;
 
-//use super::super::super::kb;
+use super::substates::SubState;
 //use super::movements::VertMove;
 //use super::EditorMode;
 
 impl Buffer {
     
     pub fn key_j(&mut self) {
-        let holder = match self.cursor.calculate_down(self.lines.len()) {
-            Some(data) => data,
-            None => {return;},
-        };
+        let holder = self.cursor.calculate_down(self.size(), self.state.get_movement_modifier());
         self.cursor.apply(holder);
-        self.update_visual_buffer();
         self.update_visual_buffer();
     }
     
     #[allow(non_snake_case)]
     pub fn key_J(&mut self) {
-        let holder = self.cursor.calculate_down_pass();
+        let holder = self.cursor.calculate_down_pass(self.size(), self.state.get_movement_modifier(), self.config.scrolloff);
         self.cursor.apply(holder);
         self.update_visual_buffer();
     }
     
     pub fn key_k(&mut self) {
-        /*
-        self.cursor.doc_cursor_visual.rows = 1;
-        self.cursor.doc_cursor_visual.cols = 1;
-        */
-        let holder = self.cursor.calculate_up(self.modifier.take());
+        let holder = self.cursor.calculate_up(self.state.get_movement_modifier());
         self.cursor.apply(holder);
         self.update_visual_buffer();
     }
     
     #[allow(non_snake_case)]
     pub fn key_K(&mut self) {
-        let holder = self.cursor.calculate_up_pass(self.modifier.take(), self.config.scrolloff);
+        let holder = self.cursor.calculate_up_pass(self.state.get_movement_modifier(), self.config.scrolloff);
         self.cursor.apply(holder);
         self.update_visual_buffer();
     }
     
     pub fn key_z(&mut self) {
-        //let 
-        let holder = self.cursor.center_cursor();
-        self.cursor.apply(holder);
-        self.update_visual_buffer();
+        self.set_substate(SubState::Center);
+    }
+    
+    pub fn key_Z(&mut self) {
+        self.set_substate(SubState::CenterCursor);
+    }
+    
+    pub fn key_number(&mut self, number:u8) {
+        self.state.add_number(number);
+        eprintln!("{:?}", self.state);
     }
     
     /*

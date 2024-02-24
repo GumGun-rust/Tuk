@@ -4,9 +4,10 @@ mod graphics;
 mod keys;
 mod movements;
 mod helper;
+mod substates;
 
 use movements::Cursor;
-use helper::CommandModifiers;
+use substates::InputState;
 
 use super::super::kb;
 use super::super::h_s::TPos;
@@ -75,14 +76,14 @@ pub struct Buffer {
     
     cursor: Cursor,
     
-    modifier: CommandModifiers,
+    state: InputState,
 }
 
 impl ProcessKey for Buffer {
     fn process_key(&mut self, key:kb::KeyCode) {
         
         if let kb::KeyCode::SpecialKey(kb::SpecialKey::Debug) = key {
-            panic!("{:?}", self);
+            panic!("debug key {:#?}", self);
         }
         match self.mode {
             EditorMode::Normal => {
@@ -158,7 +159,7 @@ impl Buffer {
                 ..Config::default()
             },
             
-            modifier: CommandModifiers::default(),
+            //modifier: CommandModifiers::default(),
             
             cursor: Cursor::new(offset, term_size, doc_offset),
             ..Self::default()
@@ -183,9 +184,13 @@ impl Buffer {
     
     
     fn process_key_visual(&mut self, key:kb::KeyCode) {
+        let key = match self.current_substate().apply(self, key) {
+            Some(key) => key,
+            None => {return;}
+        };
+        
         match key {
             kb::KeyCode::Letter(letter) => {
-                
                 match letter {
                     b'd' => {
                         eprintln!("{:?}", letter);
@@ -207,21 +212,21 @@ impl Buffer {
                     b'z' => {
                         self.key_z();
                     }
+                    b'Z' => {
+                        self.key_Z();
+                    }
                     _ => {}
                     
                 } 
                 
             }
             kb::KeyCode::Number(number) => {
-                eprintln!("{}", number);
-                
+                self.key_number(number);
             }
             _ => {panic!();}
         }
     }
     
-    
-
     #[allow(dead_code)]
     fn process_key_insert(&mut self, _key:kb::KeyCode) {
         
@@ -317,12 +322,15 @@ impl Buffer {
             Absolute | Both => max(margin_size.try_into().unwrap(), 4)
         };
         //panic!("{} {}", self.margin_left, string);
-        
     }
 
     #[allow(dead_code)]
     fn write_file(&mut self) {
         self.lines.save();
+    }
+    
+    pub fn size(&self) -> usize {
+        self.lines.len()
     }
 }
 

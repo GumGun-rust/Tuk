@@ -91,6 +91,6 @@ impl Buffer {
         self.visual_buffer.push_str(&format!("\x1b[{}G", pivot_anchor.cols+u16::from(self.margin_left)+self.cursor.sec_doc_cursor_visual));
         
     }
-
+    
 }
 

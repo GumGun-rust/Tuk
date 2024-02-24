@@ -1,7 +1,7 @@
 
 use std::cmp;
 use super::super::super::h_s::TPos;
-use super::helper::CommandModifiers;
+//use super::helper::CommandModifiers;
 
 #[allow(dead_code)]
 #[derive(Default, Debug)]
@@ -50,10 +50,20 @@ pub enum BackspaceAction {
 }
 */
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum VertDirection {
     Up,
     Down,
+}
+
+impl VertDirection{
+    fn complementary(self) -> VertDirection {
+        use VertDirection::*;
+        match self {
+            Up => Down,
+            Down => Up,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -98,6 +108,18 @@ impl VertMove {
             pass_cursor: 0,
         }
     }
+    
+    pub fn get_complementary(&self) -> Self {
+        
+        Self{
+            direction: self.direction.complementary(),
+            push_doc: self.pass_cursor,
+            push_pass: 0,
+            pass_cursor: 0,
+        }
+        
+    }
+    
 }
 
 impl Cursor {
@@ -113,7 +135,6 @@ impl Cursor {
     
     pub(super) fn apply(&mut self, movement:VertMove) {
         use VertDirection::*;
-        //use MoveAction::*;
         match movement.direction {
             Down => {
                 self.doc_offset.rows += movement.push_doc;
@@ -139,38 +160,39 @@ impl Cursor {
         }
     }
     
-    pub(super) fn calculate_up(&self, modifier:CommandModifiers) -> VertMove {
-        let movement = cmp::min(self.doc_position.rows, modifier.amount);
+    pub(super) fn calculate_up(
+        &self, 
+        modifier:usize
+    ) -> VertMove {
+        let movement = cmp::min(self.doc_position.rows, modifier);
         VertMove::push_doc(VertDirection::Up, movement)
+    }
+    
+    pub(super) fn calculate_down(
+        &self, 
+        doc_size:usize,
+        modifier: usize,
+    ) -> VertMove {
+        
+        let lines_left = doc_size - self.doc_position.rows - 1;
+        let movement = cmp::min(lines_left, modifier);
+        VertMove::push_doc(VertDirection::Down, movement)
     }
     
     pub(super) 
     fn calculate_up_pass(
         &self, 
-        modifier: CommandModifiers, 
-        scrolloff: u16
+        modifier: usize,
+        scrolloff: u16,
     ) -> VertMove { 
         
         let cursor_rows = usize::try_from(self.doc_cursor_visual.rows-scrolloff).expect(MESSAGE);
-        let mut left_amount = modifier.amount;
+        let mut left_amount = modifier;
         let pass_cursor_limit = cmp::min(cmp::min(self.doc_position.rows, cursor_rows), left_amount);
         left_amount -= pass_cursor_limit;
-        /*
-        eprintln!("=================");
-        eprintln!("pass-cursor:{}", pass_cursor_limit);
-        eprintln!("left:{}", left_amount);
-        */
         let push_pass_limit = cmp::min(cursor_rows-pass_cursor_limit, left_amount);
         left_amount -= push_pass_limit;
-        /*
-        eprintln!("push-pass:{}", push_pass_limit);
-        eprintln!("left:{}", left_amount);
-        */
         let push_doc_limit = cmp::min(self.doc_position.rows-pass_cursor_limit, left_amount);
-        /*
-        eprintln!("push-doc:{}", push_doc_limit);
-        eprintln!("left:{}", left_amount);
-        */
         
         VertMove{
             direction: VertDirection::Up,
@@ -180,24 +202,48 @@ impl Cursor {
         }
     }
     
+    pub(super) fn calculate_down_pass(
+        &self,
+        doc_size:usize,
+        modifier: usize,
+        scrolloff: u16,
+    ) -> VertMove {
+        
+        let lines_left = doc_size - self.doc_position.rows - 1;
+        
+        let cursor_rows = usize::try_from(self.buffer_size.rows - self.doc_cursor_visual.rows - scrolloff).expect(MESSAGE);
+        let mut left_amount = modifier;
+        let pass_cursor_limit = cmp::min(cmp::min(lines_left, cursor_rows), left_amount);
+        left_amount -= pass_cursor_limit;
+        
+        let push_pass_limit = cmp::min(cursor_rows-pass_cursor_limit, left_amount);
+        left_amount -= push_pass_limit;
+        
+        let push_doc_limit = cmp::min(lines_left-pass_cursor_limit, left_amount);
+        
+        VertMove{
+            direction: VertDirection::Down,
+            push_doc: push_doc_limit,
+            push_pass: push_pass_limit,
+            pass_cursor: pass_cursor_limit,
+        }
+    }
+    
     pub(super) 
     fn center_cursor(
         &self, 
+        doc_size:usize,
+        scrolloff:u16,
     ) -> VertMove {
         let buffer_size = isize::try_from(self.buffer_size.rows).expect(MESSAGE)/2;
         let cursor_rows = isize::try_from(self.doc_cursor_visual.rows).expect(MESSAGE);
-        
         let movement = buffer_size - cursor_rows;
-        
         match movement {
             amount @ isize::MIN ..= -1 => {
-                let holder = CommandModifiers{
-                    amount: amount.abs() as usize //abs of isize is granted to be a usize
-                };
-                self.calculate_up_pass(holder, 0)
+                self.calculate_up_pass(amount.abs() as usize, scrolloff)//abs of isize is granted to be a usize
             }
             amount @ 1 ..= isize::MAX => {
-                todo!("subir {amount}");
+                self.calculate_down_pass(doc_size, amount.abs() as usize, scrolloff)//abs of isize is granted to be a usize
             }
             _ => {
                 VertMove::empty()
@@ -205,22 +251,62 @@ impl Cursor {
         }
     }
     
-    pub(super) fn calculate_down(&self, doc_size:usize) -> Option<VertMove> {
-        if self.doc_position.rows < doc_size-1 {
-            Some(VertMove::push_doc(VertDirection::Down, 1))
+    pub(super) 
+    fn set_top_cursor(
+        &self, 
+        scrolloff:u16,
+    ) -> VertMove {
+        let cursor_rows = usize::try_from(self.doc_cursor_visual.rows).expect(MESSAGE);
+        let movement = cursor_rows - scrolloff as usize;
+        
+        if movement == 0 {
+            VertMove::empty()
         } else {
-            None
+            self.calculate_up_pass(movement, scrolloff)
         }
     }
     
-    pub(super) fn calculate_down_pass(&self) -> VertMove {
-        VertMove{
-            direction: VertDirection::Down,
-            push_doc: 0,
-            push_pass: 0,
-            pass_cursor: 1,
+    pub(super) 
+    fn set_bottom_cursor(
+        &self, 
+        doc_size:usize,
+        scrolloff:u16,
+    ) -> VertMove {
+        let buffer_size = usize::try_from(self.buffer_size.rows).expect(MESSAGE)-scrolloff as usize;
+        let cursor_rows = usize::try_from(self.doc_cursor_visual.rows).expect(MESSAGE);
+        let movement = buffer_size - cursor_rows;
+        
+        if movement == 0 {
+            VertMove::empty()
+        } else {
+            self.calculate_down_pass(doc_size, movement, scrolloff)
         }
     }
+    
+    
+    pub(super) 
+    fn center_cursor_page(
+        &self, 
+        doc_size:usize,
+        scrolloff:u16,
+    ) -> VertMove {
+        let buffer_size = isize::try_from(self.buffer_size.rows).expect(MESSAGE)/2;
+        let cursor_rows = isize::try_from(self.doc_cursor_visual.rows).expect(MESSAGE);
+        let movement = buffer_size - cursor_rows;
+        match movement {
+            amount @ isize::MIN ..= -1 => {
+                self.calculate_up_pass(amount.abs() as usize, scrolloff)//abs of isize is granted to be a usize
+            }
+            amount @ 1 ..= isize::MAX => {
+                self.calculate_down_pass(doc_size, amount.abs() as usize, scrolloff)//abs of isize is granted to be a usize
+            }
+            _ => {
+                VertMove::empty()
+            }
+        }
+    }
+    
+    
 }
 
 

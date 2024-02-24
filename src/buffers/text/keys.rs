@@ -24,6 +24,6 @@ impl Buffer {
         self.test_cursor.enter_movement(self.margin_left);
     }
     */
-    
 }
-    
+
+
