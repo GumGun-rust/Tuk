@@ -18,6 +18,24 @@ pub enum Buffers {
     FileExp(file_explorer_buffer::Buffer),
 }
 
+impl std::ops::Deref for Buffers {
+    type Target = dyn BufferTraits;
+    fn deref(&self) -> &Self::Target {
+        match self{
+            Self::Text(text_buffer) => {text_buffer}
+            _ => {panic!();}
+        }
+    }
+}
+
+impl std::ops::DerefMut for Buffers {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self{
+            Self::Text(text_buffer) => {text_buffer}
+            _ => {panic!();}
+        }
+    }
+}
 
 impl Buffers {
     #[allow(unused_variables)]
@@ -26,6 +44,7 @@ impl Buffers {
     }
 }
 
+/*
 impl ProcessKey for Buffers {
     fn process_key(&mut self, key:kb::KeyCode){
         match self {
@@ -84,6 +103,23 @@ impl GetSbData for Buffers {
     }
 }
 
+
+/*
+impl MoveWindow for Buffers {
+    fn move_window(&mut self, arg:TPos<u16>) ->Result<(), ()> {
+        match self {
+            Buffers::Text(buffer) => {
+                buffer.move_window(arg)
+            }
+            Buffers::FileExp(buffer) => {
+                todo!("{:?}", buffer);
+            }
+        }
+    }
+}
+*/
+
+*/
 
 
 #[derive(Default, Debug, Clone)]

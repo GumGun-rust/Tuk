@@ -18,6 +18,7 @@ use super::GetVisualBuffer;
 use super::ProcessKey;
 use super::GetSbData;
 use super::StatusBarData;
+use super::MoveWindow;
 use std::path::PathBuf;
 use std::cmp::max;
 use debug_ignore::DebugIgnore;
@@ -106,6 +107,18 @@ impl GetCursorLocation for Buffer {
 impl GetVisualBuffer for Buffer {
     fn get_visual_buffer(&self) -> &str{
         &self.visual_buffer
+    }
+}
+
+impl MoveWindow for Buffer {
+    fn move_window(&mut self, new_pos:TPos<u16>) -> Result<(), ()>{
+        self.cursor.offset-=1;//TODO: this function only moves the window in diagonal
+        Ok(())
+    }
+    
+    
+    fn get_position(&self) -> TPos<u16>{
+        panic!();
     }
 }
 

@@ -38,7 +38,6 @@ impl Buffer {
 
 
 impl InputState {
-    
     pub fn get_movement_modifier(&mut self) -> usize{
         let holder = self.amount+1;
         self.reset();
@@ -144,5 +143,4 @@ impl SubCommand for Center {
         }
     }
 }
-
 

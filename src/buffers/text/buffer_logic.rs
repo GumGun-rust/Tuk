@@ -36,6 +36,7 @@ impl Buffer {
         self.set_substate(SubState::Center);
     }
     
+    #[allow(non_snake_case)]
     pub fn key_Z(&mut self) {
         self.set_substate(SubState::CenterCursor);
     }
