@@ -1,0 +1,2 @@
+alias T="./tuk 2> out"
+alias TE="./tuk test/testSrc.txt 2> out"
