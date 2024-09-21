@@ -7,6 +7,7 @@ pub use traits::*;
 
 use super::kb;
 use super::h_s::TPos;
+use super::BufferError;
 
 use arrayvec::ArrayString;
 

@@ -18,7 +18,8 @@ use super::GetVisualBuffer;
 use super::ProcessKey;
 use super::GetSbData;
 use super::StatusBarData;
-use super::MoveWindow;
+use super::MoveResizeWindow;
+use super::BufferError;
 use std::path::PathBuf;
 use std::cmp::max;
 use debug_ignore::DebugIgnore;
@@ -110,15 +111,59 @@ impl GetVisualBuffer for Buffer {
     }
 }
 
-impl MoveWindow for Buffer {
-    fn move_window(&mut self, new_pos:TPos<u16>) -> Result<(), ()>{
-        self.cursor.offset-=1;//TODO: this function only moves the window in diagonal
-        Ok(())
+impl MoveResizeWindow for Buffer {
+    fn move_window_delta(&mut self, window:TPos<u16>, delta:TPos<i32>) -> Result<TPos<u16>, BufferError>{
+        let [rows, cols] = delta.destructure();
+        match rows {
+            delta_rows @ i32::MIN..0 => {
+                self.cursor.offset.rows -= u16::try_from(-delta_rows).expect("hola");
+            }
+            delta_rows @ _ => {
+                self.cursor.offset.rows += u16::try_from(delta_rows).expect("hola");
+            }
+        }
+        match cols {
+            delta_cols @ i32::MIN..0 => {
+                self.cursor.offset.cols -= u16::try_from(-delta_cols).expect("hola");
+            }
+            delta_cols @ _ => {
+                self.cursor.offset.cols += u16::try_from(delta_cols).expect("hola");
+            }
+        }
+        Ok(self.get_position())
     }
     
+    fn resize_delta(&mut self, window:TPos<u16>, delta:TPos<i32>) -> Result<TPos<u16>, BufferError>{
+        let [rows, cols] = delta.destructure();
+        match rows {
+            delta_rows @ i32::MIN..0 => {
+                self.cursor.buffer_size.rows -= u16::try_from(-delta_rows).expect("hola");
+            }
+            delta_rows @ _ => {
+                self.cursor.buffer_size.rows += u16::try_from(delta_rows).expect("hola");
+            }
+        }
+        match cols {
+            delta_cols @ i32::MIN..0 => {
+                self.cursor.buffer_size.cols -= u16::try_from(-delta_cols).expect("hola");
+            }
+            delta_cols @ _ => {
+                self.cursor.buffer_size.cols += u16::try_from(delta_cols).expect("hola");
+            }
+        }
+        
+        self.cursor.doc_offset.rows = usize::try_from(self.cursor.buffer_size.rows).unwrap()-2;
+        self.cursor.doc_cursor_visual.rows = 2;
+        self.cursor.doc_position.rows = 0;
+        Ok(self.get_position())
+    }
     
     fn get_position(&self) -> TPos<u16>{
-        panic!();
+        self.cursor.offset
+    }
+    
+    fn get_size(&self) -> TPos<u16>{
+        self.cursor.buffer_size
     }
 }
 
@@ -328,11 +373,14 @@ impl Buffer {
         use Numeration::*;
         let string = self.lines.len().to_string();
         let margin_size = string.len()+1;
+        
+        let screen_size = self.cursor.buffer_size.rows.to_string().len()+1;
+        
         self.margin_left = match self.config.numeration {
             No => 0,
             Default => 3,
-            Relative => 4,
-            Absolute | Both => max(margin_size.try_into().unwrap(), 4)
+            Relative => screen_size.try_into().unwrap(),
+            Absolute | Both => max(margin_size.try_into().unwrap(), screen_size.try_into().unwrap())
         };
         //panic!("{} {}", self.margin_left, string);
     }
