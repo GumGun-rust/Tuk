@@ -4,10 +4,15 @@ mod graphics;
 mod keys;
 mod movements;
 mod helper;
-mod substates;
+
+mod normal_state;
+mod generic_state;
+mod insert_state;
 
 use movements::Cursor;
-use substates::InputState;
+use normal_state::InputState;
+use normal_state::SubCommandReturn;
+
 
 use super::super::kb;
 use super::super::h_s::TPos;
@@ -23,13 +28,14 @@ use super::BufferError;
 use std::path::PathBuf;
 use std::cmp::max;
 use debug_ignore::DebugIgnore;
+use derivative::Derivative;
 
 
-
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Derivative, Debug, Clone, Copy)]
+#[derivative(Default)]
 pub enum EditorMode {
-    #[default]
-    Normal,
+    #[derivative(Default)]
+    Normal(InputState),
     Insert,
 }
 
@@ -78,21 +84,21 @@ pub struct Buffer {
     
     cursor: Cursor,
     
-    state: InputState,
 }
 
 impl ProcessKey for Buffer {
-    fn process_key(&mut self, key:kb::KeyCode) {
+    fn process_key(&mut self, key:kb::KeyCode) -> Option<()> {
         
         if let kb::KeyCode::SpecialKey(kb::SpecialKey::Debug) = key {
             panic!("debug key {:#?}", self);
         }
+        
         match self.mode {
-            EditorMode::Normal => {
-                self.process_key_visual(key);
+            EditorMode::Normal(mut normal_context) => {
+                InputState::apply(self, key)
             }
             EditorMode::Insert => {
-                self.process_key_insert(key);
+                None
             }
         }
     }
@@ -100,7 +106,7 @@ impl ProcessKey for Buffer {
 
 impl GetCursorLocation for Buffer {
     fn get_cursor_location(&self) -> (TPos<u16>, char) {
-        (self.cursor.doc_cursor_visual + self.cursor.offset+1, char::from(self.config.cursor_type))
+        (self.cursor.doc_cursor_visual + self.cursor.offset, char::from(self.config.cursor_type))
     }
     
 }
@@ -111,6 +117,7 @@ impl GetVisualBuffer for Buffer {
     }
 }
 
+//TODO: potencially improve this part of the code
 impl MoveResizeWindow for Buffer {
     fn move_window_delta(&mut self, window:TPos<u16>, delta:TPos<i32>) -> Result<TPos<u16>, BufferError>{
         let [rows, cols] = delta.destructure();
@@ -181,7 +188,7 @@ impl Buffer {
             cols: 0//usize::from(term_size.cols)
         };
         
-        let doc_cursor_visual_cols = u16::try_from(term_size.rows).unwrap() - (u16::try_from(doc_offset.rows).unwrap() - 0);// u16::try_from(holder.cursor.doc_position.rows).unwrap());
+        let doc_cursor_visual_cols = u16::try_from(term_size.rows).unwrap() - (u16::try_from(doc_offset.rows).unwrap()) - 1;// u16::try_from(holder.cursor.doc_position.rows).unwrap());
         
         
         let lines_holder;
@@ -227,7 +234,7 @@ impl Buffer {
         
         //
         holder.cursor.sec_doc_cursor_visual = 0;// TOCHANGE ;
-        //
+        //-1
         
         holder.cursor.doc_cursor_visual = TPos::<u16>{
             cols: u16::from(holder.margin_left),//u16::try_from(holder.cursor.doc_position.cols).unwrap(),
@@ -241,55 +248,23 @@ impl Buffer {
     }
     
     
-    fn process_key_visual(&mut self, key:kb::KeyCode) {
+    fn process_key_normal(&mut self, key:kb::KeyCode) {
+        /*
         let key = match self.current_substate().apply(self, key) {
-            Some(key) => key,
-            None => {return;}
+            SubCommandReturn::Key(_) => {
+                panic!();
+            }
+            SubCommandReturn::SubstateNormal(state) => {
+                self.state.substate = state;
+            }
         };
-        
-        match key {
-            kb::KeyCode::Letter(letter) => {
-                match letter {
-                    b'd' => {
-                        eprintln!("{:?}", letter);
-                        eprintln!("{:#?}", self);
-                        eprintln!("{:?}", self.lines.len())
-                    }
-                    b'j' => {  
-                        self.key_j();
-                    } 
-                    b'J' => {  
-                        self.key_J();
-                    } 
-                    b'k' => {  
-                        self.key_k();
-                    } 
-                    b'K' => {  
-                        self.key_K();
-                    } 
-                    b'z' => {
-                        self.key_z();
-                    }
-                    b'Z' => {
-                        self.key_Z();
-                    }
-                    _ => {}
-                    
-                } 
-                
-            }
-            kb::KeyCode::Number(number) => {
-                self.key_number(number);
-            }
-            _ => {panic!();}
-        }
+        */
     }
     
     #[allow(dead_code)]
     fn process_key_insert(&mut self, _key:kb::KeyCode) {
         
     }
-    
     
 
     fn get_column_decoration(&self, deco:&mut String, line:i64, inside_doc:bool) {
@@ -398,9 +373,29 @@ impl Buffer {
 impl From<EditorMode> for usize {
     fn from(mode:EditorMode) -> usize {
         match mode {
-            EditorMode::Normal => 0,
+            EditorMode::Normal(_) => 0,
             EditorMode::Insert => 1,
         }
     }
+}
+
+impl EditorMode {
+    fn normal_default() -> Self {
+        Self::Normal(InputState::default())
+    }
+    
+    /*
+    fn apply(&self, buffer:&mut Buffer, key:kb::KeyCode){
+        match self {
+            EditorMode::Normal(mut normal_context) => {
+                normal_context.apply(buffer, key);
+                //self.process_key_normal(key);
+            }
+            EditorMode::Insert => {
+                //self.process_key_insert(key);
+            }
+        }
+    }
+    */
 }
 

@@ -16,12 +16,15 @@ impl Buffer {
         }
         self.visual_buffer.push_str(&format!("\x1b[{};{}H", pivot_anchor.rows, pivot_anchor.cols));
         
-        for line in (0..=self.cursor.buffer_size.rows).rev() {
+        for line in (0..self.cursor.buffer_size.rows).rev() {
             let real_line = i64::try_from(self.cursor.doc_offset.rows).unwrap()-i64::try_from(line).unwrap();//-i64::try_from(self.doc_position.rows).unwrap();
             
             match real_line {
+                
+                //
+                //top padding
+                //
                 current_line if current_line < 0 => {
-                    //top padding
                     self.visual_buffer.push_str("\x1b[42m");
                     self.get_column_decoration(&mut deco, real_line, false);
                     self.visual_buffer.push_str(&deco);
@@ -63,11 +66,14 @@ impl Buffer {
                     }
                     
                 }
+                //
+                //bottom padding
+                //
                 _current_line => {
-                    //bottom padding
                     self.visual_buffer.push_str("\x1b[44m");
                     self.get_column_decoration(&mut deco, real_line, false);
                     self.visual_buffer.push_str(&deco);
+                    
                     
                     for _ in deco.len()..usize::from(self.cursor.buffer_size.cols) {
                         self.visual_buffer.push(' ');

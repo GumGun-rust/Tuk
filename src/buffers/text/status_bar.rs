@@ -28,7 +28,7 @@ impl Buffer {
             file_color: ArrayString::from("\x1b[0;39;48;5;244m").unwrap(),
             middle_color: ArrayString::from("\x1b[0;39;48;5;238m").unwrap(),
         };
-        self.status_bar_data.insert(usize::from(EditorMode::Normal), holder);
+        self.status_bar_data.insert(usize::from(EditorMode::normal_default()), holder);
         
         let holder = StatusBarData{
             mode_color: ArrayString::from("\x1b[1;38;5;196;48;5;208m").unwrap(),

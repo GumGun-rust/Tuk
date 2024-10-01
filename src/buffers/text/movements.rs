@@ -211,7 +211,7 @@ impl Cursor {
         
         let lines_left = doc_size - self.doc_position.rows - 1;
         
-        let cursor_rows = usize::try_from(self.buffer_size.rows - self.doc_cursor_visual.rows - scrolloff).expect(MESSAGE);
+        let cursor_rows = usize::try_from(self.buffer_size.rows - self.doc_cursor_visual.rows - (scrolloff + 1)).expect(MESSAGE);
         let mut left_amount = modifier;
         let pass_cursor_limit = cmp::min(cmp::min(lines_left, cursor_rows), left_amount);
         left_amount -= pass_cursor_limit;
@@ -272,7 +272,7 @@ impl Cursor {
         doc_size:usize,
         scrolloff:u16,
     ) -> VertMove {
-        let buffer_size = usize::try_from(self.buffer_size.rows).expect(MESSAGE)-scrolloff as usize;
+        let buffer_size = usize::try_from(self.buffer_size.rows).expect(MESSAGE)-(scrolloff+1) as usize;
         let cursor_rows = usize::try_from(self.doc_cursor_visual.rows).expect(MESSAGE);
         let movement = buffer_size - cursor_rows;
         

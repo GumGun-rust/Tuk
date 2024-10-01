@@ -3,16 +3,18 @@ use super::super::kb;
 use super::StatusBarData;
 use super::BufferError;
 
-pub trait BufferTraits: ProcessKey + GetCursorLocation + GetSbData + GetVisualBuffer/* + UpdateVisualBuffer*/ + MoveResizeWindow/* + ResizeWindow*/{
-    
-}
+pub trait BufferTraits: ProcessKey + GetCursorLocation + GetSbData + GetVisualBuffer/* + UpdateVisualBuffer*/ + MoveResizeWindow{}
 
-impl<BufferType:ProcessKey + GetCursorLocation + GetSbData + GetVisualBuffer/* + UpdateVisualBuffer*/ + MoveResizeWindow/* + ResizeWindow*/> BufferTraits for BufferType{
+impl<BufferType:ProcessKey + GetCursorLocation + GetSbData + GetVisualBuffer/* + UpdateVisualBuffer*/ + MoveResizeWindow> BufferTraits for BufferType{
     
 }
 
 pub trait ProcessKey {
-    fn process_key(&mut self, key:kb::KeyCode);
+    fn process_key(&mut self, key:kb::KeyCode) -> Option<()>;
+}
+
+pub trait ProcessSpecialKey {
+    fn process_special_key(&mut self) -> Result<(), ()>;
 }
 
 pub trait GetCursorLocation {

@@ -1,49 +1,42 @@
 use super::Buffer;
 
-use super::substates::SubState;
+use super::normal_state::SubstateNormal;
 //use super::movements::VertMove;
 //use super::EditorMode;
 
 impl Buffer {
     
-    pub fn key_j(&mut self) {
-        let holder = self.cursor.calculate_down(self.size(), self.state.get_movement_modifier());
-        self.cursor.apply(holder);
-        self.update_visual_buffer();
-    }
-    
     #[allow(non_snake_case)]
     pub fn key_J(&mut self) {
+        todo!();
+        /*
         let holder = self.cursor.calculate_down_pass(self.size(), self.state.get_movement_modifier(), self.config.scrolloff);
         self.cursor.apply(holder);
         self.update_visual_buffer();
-    }
-    
-    pub fn key_k(&mut self) {
-        let holder = self.cursor.calculate_up(self.state.get_movement_modifier());
-        self.cursor.apply(holder);
-        self.update_visual_buffer();
+        */
     }
     
     #[allow(non_snake_case)]
     pub fn key_K(&mut self) {
+        todo!();
+        /*
         let holder = self.cursor.calculate_up_pass(self.state.get_movement_modifier(), self.config.scrolloff);
         self.cursor.apply(holder);
         self.update_visual_buffer();
+        */
     }
     
     pub fn key_z(&mut self) {
-        self.set_substate(SubState::Center);
     }
     
     #[allow(non_snake_case)]
     pub fn key_Z(&mut self) {
-        self.set_substate(SubState::CenterCursor);
     }
     
     pub fn key_number(&mut self, number:u8) {
-        self.state.add_number(number);
-        eprintln!("{:?}", self.state);
+        todo!("");
+        //self.state.add_number(number);
+        //eprintln!("{:?}", self.state);
     }
     
     /*
